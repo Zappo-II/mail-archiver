@@ -11,7 +11,14 @@ name: Publish fork image to GHCR
 #
 # This file must never be proposed upstream.
 
+# Triggered by pushing the deployment branch. A push trigger reads the workflow from the branch
+# being pushed, so it works from a non-default branch; workflow_dispatch does not, because GitHub
+# only offers a manual run for workflows present on the repository's default branch. That is why
+# the push trigger is the primary one here.
 on:
+  push:
+    branches:
+      - local/migration
   workflow_dispatch:
     inputs:
       tag:
@@ -61,7 +68,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/mailarchiver
           tags: |
-            type=raw,value=${{ inputs.tag }}
+            type=raw,value=${{ inputs.tag || 'offload' }}
             type=sha,format=long
 
       - name: Build and push Docker image
@@ -69,7 +76,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ inputs.platforms }}
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
