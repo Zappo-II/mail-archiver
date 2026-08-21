@@ -1,0 +1,92 @@
+name: Publish fork image to GHCR
+
+# Fork-only. Builds the offload branch on GitHub's runners and publishes it to this fork's
+# GHCR namespace, so a server can pull a finished image instead of holding a source tree and
+# a build toolchain.
+#
+# Deliberately different from the two upstream workflows in one respect: it does not touch
+# Docker Hub. Those log in with secrets.DOCKERHUB_USERNAME / DOCKERHUB_TOKEN, which do not
+# exist on a fork, and pushing to docker.io/s1t5/mailarchiver would be wrong even if they did.
+# GHCR needs no configured secret: GITHUB_TOKEN is provided automatically.
+#
+# This file must never be proposed upstream.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to publish (e.g. offload, offload-rc2)'
+        required: true
+        default: 'offload'
+        type: string
+      platforms:
+        description: 'Target platforms'
+        required: true
+        default: 'linux/amd64'
+        type: choice
+        options:
+          - linux/amd64
+          - linux/amd64,linux/arm64
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      # Only needed when building arm64 on an amd64 runner, and it roughly doubles the build
+      # time, so it is skipped for a single-platform build.
+      - name: Set up QEMU
+        if: contains(inputs.platforms, 'arm64')
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/mailarchiver
+          tags: |
+            type=raw,value=${{ inputs.tag }}
+            type=sha,format=long
+
+      - name: Build and push Docker image
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ inputs.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "### Image published"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  /'
+            echo '```'
+            echo
+            echo "Digest: \`${{ steps.docker_build.outputs.digest }}\`"
+            echo
+            echo "The commit-sha tag is the immutable one. Pin the server to that for a"
+            echo "reproducible deployment, and use the moving tag only for convenience."
+          } >> "$GITHUB_STEP_SUMMARY"
