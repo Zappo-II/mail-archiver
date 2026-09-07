@@ -29,8 +29,8 @@ Quick sync is the normal operating mode that runs automatically at the configure
    - **M365 (Graph)**: `receivedDateTime ge (LastSync − 12 hours)`
 3. The 12-hour overlap is intentional. It catches messages that were delivered by the provider after the previous sync started but with a slightly older server timestamp, and it tolerates minor clock skew between the mail server and the Mail Archiver host. Duplicates are filtered out by the duplicate check, so the overlap never creates double entries.
 4. For each non-excluded folder, the filtered message list is fetched in batches and archived. Existing messages are skipped.
-5. On **successful completion** (no failed messages, no rate-limit hit), `LastSync` is set to `DateTime.UtcNow` and the next cycle starts from that point.
-6. If **any message failed** to process, `LastSync` is **not** updated, so the next cycle re-attempts the same window.
+5. On **successful completion** (no failed messages, no folders that failed as a whole, no rate-limit hit), `LastSync` is set to `DateTime.UtcNow` and the next cycle starts from that point.
+6. If **any message failed** to process, or **any folder could not be synced at all** (see [Folders That Fail as a Whole](#-folders-that-fail-as-a-whole)), `LastSync` is **not** updated, so the next cycle re-attempts the same window.
 7. If the account is **rate-limited** (see [Rate Limit Handling](RateLimitHandling.md)), `LastSync` is also left untouched and the sync resumes from a per-folder checkpoint once the daily quota resets.
 
 ### When you see it
@@ -60,7 +60,7 @@ A Full Sync is triggered whenever an account's `LastSync` is set to the Unix epo
 - If the server returns fewer results than the folder actually contains (some IMAP servers cap `SEARCH` results), Mail Archiver detects the discrepancy and falls back to fetching all `UniqueId`s by sequence number, so no messages are silently dropped.
 - Messages that are already in the archive are detected as duplicates and skipped – the existing archived copy is **not** overwritten. If a duplicate is found in a different folder name than before, the stored `FolderName` field is updated to reflect the current location.
 - For very large mailboxes, the Full Sync can take several hours or even days. When bandwidth tracking is enabled, the sync pauses gracefully at the daily quota and resumes from per-folder checkpoints on the next day (see [Rate Limit Handling](RateLimitHandling.md)).
-- `LastSync` is updated to `DateTime.UtcNow` only after a Full Sync completes without failed messages, exactly like a Quick Sync.
+- `LastSync` is updated to `DateTime.UtcNow` only after a Full Sync completes without failed messages and without failed folders, exactly like a Quick Sync.
 
 ### When to use a manual Full Sync
 
@@ -221,12 +221,50 @@ differently. It is deliberately not implemented: it costs a second round trip pe
 Both counts appear in the account's completion log line:
 
 ```
-Sync completed for account: Example. New: 0, Failed: 0, Deleted: 0, Recovered: 25, Provider placeholders: 25
+Sync completed for account: Example. New: 0, Failed: 0, Deleted: 0, Recovered: 25, Provider placeholders: 25, Failed folders: 0
 ```
 
 `Recovered` counts messages the fallback rescued; `Provider placeholders` is the subset of those
 that turned out to be provider-generated error documents. `Failed: 0` alongside them is the point of
 the feature — the account is no longer stuck.
+
+---
+
+## 📁 Folders That Fail as a Whole
+
+A message can fail on its own, and a folder can fail as a unit — the server lists it, but opening or
+searching it raises an error. Some servers advertise folders through `LIST`/`LSUB` that then answer
+`NO ... doesn't exist` on `EXAMINE`.
+
+These are counted separately, one per folder:
+
+```
+Sync completed for account: Example. New: 120, Failed: 0, Deleted: 0, Recovered: 0, Provider placeholders: 0, Failed folders: 2
+```
+
+`Failed folders: 2` means two folders could not be synced at all. It does **not** mean any
+particular message failed — when a folder cannot be opened, nothing is known about the messages in
+it, so no number of failed messages would be truthful.
+
+**Why this is its own counter.** A folder-level failure used to be recorded as failed *messages*,
+as many as had been processed in that folder up to that point. That number was invented, and it
+overwrote the folder's real per-message failures. One inaccessible folder could therefore report
+hundreds of failed messages that were in fact archived perfectly well.
+
+**Effect on `LastSync`, unchanged.** A folder that failed as a whole still prevents `LastSync` from
+advancing, exactly as it did when it was being counted as failed messages. Only the reporting has
+changed, not the behaviour: the account still retries the same window on the next cycle. This is
+deliberate — an incremental sync that moved past a folder it never managed to read would never come
+back for the mail in it.
+
+Both counts are visible at `Information` level, and the warning that names them is emitted whenever
+`LastSync` is held back:
+
+```
+Not updating LastSync for account Example: 0 failed emails, 2 folders that could not be synced at all
+```
+
+Applies to both providers, IMAP and M365 (Graph).
 
 ---
 

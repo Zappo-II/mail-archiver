@@ -105,6 +105,7 @@ namespace MailArchiver.Services.Providers.Imap
             var processedEmails = 0;
             var newEmails = 0;
             var failedEmails = 0;
+            var failedFolders = 0;
             var recoveredEmails = 0;
             var providerPlaceholderEmails = 0;
             var deletedEmails = 0;
@@ -165,6 +166,7 @@ namespace MailArchiver.Services.Providers.Imap
                         processedEmails += folderResult.ProcessedEmails;
                         newEmails += folderResult.NewEmails;
                         failedEmails += folderResult.FailedEmails;
+                        failedFolders += folderResult.FailedFolders;
                         recoveredEmails += folderResult.RecoveredEmails;
                         providerPlaceholderEmails += folderResult.ProviderPlaceholderEmails;
 
@@ -193,7 +195,7 @@ namespace MailArchiver.Services.Providers.Imap
                     {
                         _logger.LogError(ex, "Error syncing folder {FolderName} for account {AccountName}: {Message}",
                             folder.FullName, account.Name, ex.Message);
-                        failedEmails++;
+                        failedFolders++;
                     }
                 }
 
@@ -233,7 +235,7 @@ namespace MailArchiver.Services.Providers.Imap
                     return;
                 }
 
-                if (failedEmails == 0)
+                if (SyncCompletionPolicy.MayAdvanceLastSync(failedEmails, failedFolders))
                 {
                     var trackedAccount = await _context.MailAccounts.FindAsync(account.Id);
                     if (trackedAccount != null)
@@ -250,14 +252,15 @@ namespace MailArchiver.Services.Providers.Imap
                 }
                 else
                 {
-                    _logger.LogWarning("Not updating LastSync for account {AccountName} due to {FailedCount} failed emails",
-                        account.Name, failedEmails);
+                    _logger.LogWarning("Not updating LastSync for account {AccountName}: {FailedCount} failed emails, " +
+                        "{FailedFolderCount} folders that could not be synced at all",
+                        account.Name, failedEmails, failedFolders);
                 }
 
                 await client.DisconnectAsync(true);
                 _logger.LogInformation("Sync completed for account: {AccountName}. New: {New}, Failed: {Failed}, Deleted: {Deleted}, " +
-                    "Recovered: {Recovered}, Provider placeholders: {ProviderPlaceholders}",
-                    account.Name, newEmails, failedEmails, deletedEmails, recoveredEmails, providerPlaceholderEmails);
+                    "Recovered: {Recovered}, Provider placeholders: {ProviderPlaceholders}, Failed folders: {FailedFolders}",
+                    account.Name, newEmails, failedEmails, deletedEmails, recoveredEmails, providerPlaceholderEmails, failedFolders);
 
                 if (jobId != null)
                 {
@@ -1142,14 +1145,14 @@ namespace MailArchiver.Services.Providers.Imap
                 {
                     _logger.LogError(ex, "Error searching messages in folder {FolderName}: {Message}",
                         folder.FullName, ex.Message);
-                    result.FailedEmails = result.ProcessedEmails;
+                    result.FailedFolders = 1;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error syncing folder {FolderName}: {Message}",
                     folder.FullName, ex.Message);
-                result.FailedEmails = result.ProcessedEmails;
+                result.FailedFolders = 1;
             }
 
             return result;
@@ -1446,6 +1449,14 @@ namespace MailArchiver.Services.Providers.Imap
             /// retrieval-error placeholder rather than the original message.
             /// </summary>
             public int ProviderPlaceholderEmails { get; set; }
+
+            /// <summary>
+            /// 1 when the folder failed as a unit — it could not be opened or searched, so no
+            /// statement can be made about the messages in it. Deliberately not expressed as a
+            /// number of failed messages: the count would be invented, and it would overwrite the
+            /// real per-message failures of that folder.
+            /// </summary>
+            public int FailedFolders { get; set; }
 
             public long BytesDownloaded { get; set; }
             public bool WasRateLimited { get; set; }
