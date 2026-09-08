@@ -230,9 +230,15 @@ namespace MailArchiver.Services.Providers.Imap
                     // passes: running those would defeat the point of bounding the runtime. The
                     // checkpoints stay in place and LastSync is left alone, so the next scheduled
                     // run resumes where this one stopped.
+                    // Same counters as the completion line below. Without Failed the one number
+                    // that matters here is missing: a chunk that ended with failures is a chunk
+                    // whose resume watermark stopped moving, and that is not visible anywhere else.
                     _logger.LogWarning("Sync for account {AccountName} stopped at the configured sync timeout. " +
-                        "Preserving checkpoints for resume. LastSync will NOT be updated. Processed: {Processed}, New: {New}",
-                        account.Name, processedEmails, newEmails);
+                        "Preserving checkpoints for resume. LastSync will NOT be updated. " +
+                        "Processed: {Processed}, New: {New}, Failed: {Failed}, " +
+                        "Recovered: {Recovered}, Provider placeholders: {ProviderPlaceholders}",
+                        account.Name, processedEmails, newEmails, failedEmails,
+                        recoveredEmails, providerPlaceholderEmails);
 
                     await client.DisconnectAsync(true);
 

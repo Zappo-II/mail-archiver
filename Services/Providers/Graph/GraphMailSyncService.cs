@@ -161,9 +161,12 @@ namespace MailArchiver.Services.Providers.Graph
                 {
                     // A timeout is a pause, not a failure. Stop before the retention pass, leave
                     // LastSync alone and let the next scheduled run continue.
+                    // Same counters as the completion line below, Failed included: a chunk that
+                    // ended with failures is one whose account stays held back, and that is not
+                    // visible anywhere else in this line.
                     _logger.LogWarning("Graph API sync for account {AccountName} stopped at the configured sync timeout. " +
-                        "LastSync will NOT be updated. Processed: {Processed}, New: {New}",
-                        account.Name, processedEmails, newEmails);
+                        "LastSync will NOT be updated. Processed: {Processed}, New: {New}, Failed: {Failed}",
+                        account.Name, processedEmails, newEmails, failedEmails);
 
                     if (jobId != null)
                     {
