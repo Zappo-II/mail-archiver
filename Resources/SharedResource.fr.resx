@@ -2512,6 +2512,9 @@
   <data name="RateLimited" xml:space="preserve">
     <value>Limite de débit atteint</value>
   </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Délai dépassé</value>
+  </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>La progression est mesurée par dossiers terminés. Un grand dossier (ex. INBOX) maintient la barre à 0% jusqu'à ce qu'il se termine.</value>
   </data>

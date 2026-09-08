@@ -1451,6 +1451,9 @@
   <data name="RateLimited" xml:space="preserve">
     <value>Rate Limited</value>
   </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Timed Out</value>
+  </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>Progress is measured by completed folders. A large folder (e.g. INBOX) keeps the bar at 0% until it finishes.</value>
   </data>

@@ -29,6 +29,7 @@ namespace MailArchiver.Models
         Completed,
         Failed,
         Cancelled,
-        RateLimited
+        RateLimited,
+        TimedOut
     }
 }

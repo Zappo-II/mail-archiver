@@ -13,6 +13,13 @@ namespace MailArchiver.Services
         void UpdateJobProgress(string jobId, Action<SyncJob> updateAction);
         void CompleteJob(string jobId, bool success, string? errorMessage = null);
         void CompleteJobRateLimited(string jobId, string? errorMessage = null);
+
+        /// <summary>
+        /// Ends a job that ran past its configured sync timeout. Like the rate-limited path this is
+        /// a pause, not a failure: checkpoints are left in place and LastSync is not advanced, so the
+        /// next scheduled run resumes where this one stopped.
+        /// </summary>
+        void CompleteJobTimedOut(string jobId, string? errorMessage = null);
         bool CancelJob(string jobId);
         bool CancelJobsForAccount(int accountId);
         bool AcknowledgeJobFailures(string jobId);

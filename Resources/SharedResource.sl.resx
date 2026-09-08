@@ -2512,6 +2512,9 @@
   <data name="RateLimited" xml:space="preserve">
     <value>Doseženo omejitve hitrosti</value>
   </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Časovna omejitev presežena</value>
+  </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>Napredek se meri po končanih mapah. Velika mapa (npr. INBOX) drži vrstico na 0%, dokler se ne konča.</value>
   </data>

@@ -63,7 +63,12 @@ namespace MailArchiver.Services.Providers.Imap
         /// <summary>
         /// Syncs all emails from the IMAP mailbox for the specified account.
         /// </summary>
-        public async Task SyncMailAccountAsync(MailAccount account, string? jobId = null)
+        /// <param name="cancellationToken">
+        /// The account's sync timeout. Checked at the same three points as a UI cancel — per folder,
+        /// per batch and before every message — and ends the sync as a pause that keeps its
+        /// checkpoints, not as a failure.
+        /// </param>
+        public async Task SyncMailAccountAsync(MailAccount account, string? jobId = null, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Starting IMAP sync for account: {AccountName}", account.Name);
 
@@ -87,14 +92,13 @@ namespace MailArchiver.Services.Providers.Imap
                 }
             }
 
-            // Check for incomplete checkpoints (interrupted sync)
-            if (_bandwidthOptions.Enabled)
+            // Check for incomplete checkpoints (interrupted sync). Not tied to bandwidth tracking:
+            // a sync can also be interrupted by the sync timeout or a cancel, and those installations
+            // need to resume just as much.
+            var hasIncompleteCheckpoints = await _bandwidthService.HasIncompleteCheckpointsAsync(account.Id);
+            if (hasIncompleteCheckpoints)
             {
-                var hasIncompleteCheckpoints = await _bandwidthService.HasIncompleteCheckpointsAsync(account.Id);
-                if (hasIncompleteCheckpoints)
-                {
-                    _logger.LogInformation("Found incomplete checkpoints for account {AccountName} - resuming from last position", account.Name);
-                }
+                _logger.LogInformation("Found incomplete checkpoints for account {AccountName} - resuming from last position", account.Name);
             }
 
             using var client = _connectionFactory.CreateImapClient(account.Name);
@@ -112,6 +116,7 @@ namespace MailArchiver.Services.Providers.Imap
             var deletedEmails = 0;
             var totalBytesDownloaded = 0L;
             var wasRateLimited = false;
+            var timedOut = false;
 
             try
             {
@@ -133,15 +138,24 @@ namespace MailArchiver.Services.Providers.Imap
 
                 foreach (var folder in allFolders)
                 {
-                    if (jobId != null)
+                    var stopReason = SyncInterruption.Evaluate(
+                        jobId != null ? _syncJobService.GetJob(jobId)?.Status : null,
+                        cancellationToken.IsCancellationRequested);
+
+                    if (stopReason == SyncStopReason.Cancelled)
                     {
-                        var job = _syncJobService.GetJob(jobId);
-                        if (job?.Status == SyncJobStatus.Cancelled)
+                        _logger.LogInformation("Sync job {JobId} for account {AccountName} has been cancelled", jobId, account.Name);
+                        if (jobId != null)
                         {
-                            _logger.LogInformation("Sync job {JobId} for account {AccountName} has been cancelled", jobId, account.Name);
                             _syncJobService.CompleteJob(jobId, false, "Job was cancelled");
-                            return;
                         }
+                        return;
+                    }
+
+                    if (stopReason == SyncStopReason.TimedOut)
+                    {
+                        timedOut = true;
+                        break;
                     }
 
                     try
@@ -163,7 +177,7 @@ namespace MailArchiver.Services.Providers.Imap
                             });
                         }
 
-                        var folderResult = await SyncFolderAsync(folder, account, client, jobId);
+                        var folderResult = await SyncFolderAsync(folder, account, client, jobId, cancellationToken);
                         processedEmails += folderResult.ProcessedEmails;
                         newEmails += folderResult.NewEmails;
                         failedEmails += folderResult.FailedEmails;
@@ -208,6 +222,26 @@ namespace MailArchiver.Services.Providers.Imap
                             failedFolders++;
                         }
                     }
+                }
+
+                if (timedOut)
+                {
+                    // A timeout is a pause, not a failure. Stop right here, before the retention
+                    // passes: running those would defeat the point of bounding the runtime. The
+                    // checkpoints stay in place and LastSync is left alone, so the next scheduled
+                    // run resumes where this one stopped.
+                    _logger.LogWarning("Sync for account {AccountName} stopped at the configured sync timeout. " +
+                        "Preserving checkpoints for resume. LastSync will NOT be updated. Processed: {Processed}, New: {New}",
+                        account.Name, processedEmails, newEmails);
+
+                    await client.DisconnectAsync(true);
+
+                    if (jobId != null)
+                    {
+                        _syncJobService.CompleteJobTimedOut(jobId,
+                            $"Sync timeout reached. Processed: {processedEmails}, New: {newEmails}. Sync will resume on the next run.");
+                    }
+                    return;
                 }
 
                 if (account.DeleteAfterDays.HasValue && account.DeleteAfterDays.Value > 0)
@@ -255,11 +289,11 @@ namespace MailArchiver.Services.Providers.Imap
                         await _context.SaveChangesAsync();
                     }
 
-                    if (_bandwidthOptions.Enabled)
-                    {
-                        await _bandwidthService.ClearCheckpointsAsync(account.Id);
-                        _logger.LogDebug("Cleared sync checkpoints for account {AccountName} after successful sync", account.Name);
-                    }
+                    // Always clear, not just with bandwidth tracking on: now that every installation
+                    // writes checkpoints, every installation has to drop them once the account is
+                    // through, or the next run resumes from a watermark that is no longer meaningful.
+                    await _bandwidthService.ClearCheckpointsAsync(account.Id);
+                    _logger.LogDebug("Cleared sync checkpoints for account {AccountName} after successful sync", account.Name);
                 }
                 else
                 {
@@ -573,7 +607,7 @@ namespace MailArchiver.Services.Providers.Imap
             }
         }
 
-        private async Task<SyncFolderResult> SyncFolderAsync(IMailFolder folder, MailAccount account, ImapClient client, string? jobId = null)
+        private async Task<SyncFolderResult> SyncFolderAsync(IMailFolder folder, MailAccount account, ImapClient client, string? jobId = null, CancellationToken cancellationToken = default)
         {
             var result = new SyncFolderResult();
             var totalBytesDownloaded = 0L;
@@ -601,29 +635,28 @@ namespace MailArchiver.Services.Providers.Imap
                 var lastSync = account.LastSync;
                 bool isFullSync = account.LastSync == new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-                // Resume from checkpoint if available for this folder
-                if (_bandwidthOptions.Enabled)
+                // Resume from checkpoint if available for this folder. A checkpoint is only ever
+                // honoured when it is newer than LastSync, so a stale one can never move the
+                // watermark backwards or skip mail LastSync would still have covered.
+                try
                 {
-                    try
+                    var checkpoints = await _bandwidthService.GetCheckpointsAsync(account.Id);
+                    var folderCheckpoint = checkpoints.FirstOrDefault(c => c.FolderName == folder.FullName);
+                    if (folderCheckpoint?.LastMessageDate.HasValue == true)
                     {
-                        var checkpoints = await _bandwidthService.GetCheckpointsAsync(account.Id);
-                        var folderCheckpoint = checkpoints.FirstOrDefault(c => c.FolderName == folder.FullName);
-                        if (folderCheckpoint?.LastMessageDate.HasValue == true)
+                        var checkpointDate = folderCheckpoint.LastMessageDate.Value;
+                        if (checkpointDate > lastSync)
                         {
-                            var checkpointDate = folderCheckpoint.LastMessageDate.Value;
-                            if (checkpointDate > lastSync)
-                            {
-                                _logger.LogInformation("Resuming folder {FolderName} from checkpoint date {CheckpointDate} " +
-                                    "(LastSync was {LastSync})", folder.FullName, checkpointDate, lastSync);
-                                lastSync = checkpointDate;
-                                isFullSync = false;
-                            }
+                            _logger.LogInformation("Resuming folder {FolderName} from checkpoint date {CheckpointDate} " +
+                                "(LastSync was {LastSync})", folder.FullName, checkpointDate, lastSync);
+                            lastSync = checkpointDate;
+                            isFullSync = false;
                         }
                     }
-                    catch (Exception cpEx)
-                    {
-                        _logger.LogWarning(cpEx, "Error reading checkpoints for folder {FolderName}, using LastSync", folder.FullName);
-                    }
+                }
+                catch (Exception cpEx)
+                {
+                    _logger.LogWarning(cpEx, "Error reading checkpoints for folder {FolderName}, using LastSync", folder.FullName);
                 }
 
                 if (!isFullSync)
@@ -726,14 +759,14 @@ namespace MailArchiver.Services.Providers.Imap
 
                     for (int i = 0; i < uids.Count; i += _batchOptions.BatchSize)
                     {
-                        if (jobId != null)
+                        var batchStopReason = SyncInterruption.Evaluate(
+                            jobId != null ? _syncJobService.GetJob(jobId)?.Status : null,
+                            cancellationToken.IsCancellationRequested);
+                        if (batchStopReason != SyncStopReason.None)
                         {
-                            var job = _syncJobService.GetJob(jobId);
-                            if (job?.Status == SyncJobStatus.Cancelled)
-                            {
-                                _logger.LogInformation("Sync job {JobId} for account {AccountName} has been cancelled during folder sync", jobId, account.Name);
-                                return result;
-                            }
+                            _logger.LogInformation("Sync for account {AccountName} stopped before a batch in folder {FolderName}: {Reason}",
+                                account.Name, folder.FullName, batchStopReason);
+                            return result;
                         }
 
                         var batch = uids.Skip(i).Take(_batchOptions.BatchSize).ToList();
@@ -742,14 +775,14 @@ namespace MailArchiver.Services.Providers.Imap
 
                         foreach (var uid in batch)
                         {
-                            if (jobId != null)
+                            var messageStopReason = SyncInterruption.Evaluate(
+                                jobId != null ? _syncJobService.GetJob(jobId)?.Status : null,
+                                cancellationToken.IsCancellationRequested);
+                            if (messageStopReason != SyncStopReason.None)
                             {
-                                var job = _syncJobService.GetJob(jobId);
-                                if (job?.Status == SyncJobStatus.Cancelled)
-                                {
-                                    _logger.LogInformation("Sync job {JobId} for account {AccountName} has been cancelled during message processing", jobId, account.Name);
-                                    return result;
-                                }
+                                _logger.LogInformation("Sync for account {AccountName} stopped during message processing in folder {FolderName}: {Reason}",
+                                    account.Name, folder.FullName, messageStopReason);
+                                return result;
                             }
 
                             try
@@ -1063,19 +1096,21 @@ namespace MailArchiver.Services.Providers.Imap
                                     }
                                 }
 
-                                if (_bandwidthOptions.Enabled && messageSize > 0)
+                                // Progress checkpoint, written for every installation. It used to be
+                                // gated on bandwidth tracking, which meant an interrupted sync could
+                                // only ever resume where that feature happened to be switched on.
+                                // messageSize is 0 unless bandwidth tracking computed it; the byte
+                                // tally on the checkpoint simply stays at 0 then.
+                                try
                                 {
-                                    try
-                                    {
-                                        await _bandwidthService.UpdateCheckpointAsync(
-                                            account.Id, folder.FullName,
-                                            message.Date.DateTime, message.MessageId,
-                                            messageSize);
-                                    }
-                                    catch (Exception cpEx)
-                                    {
-                                        _logger.LogWarning(cpEx, "Error updating checkpoint");
-                                    }
+                                    await _bandwidthService.UpdateCheckpointAsync(
+                                        account.Id, folder.FullName,
+                                        message.Date.DateTime, message.MessageId,
+                                        messageSize);
+                                }
+                                catch (Exception cpEx)
+                                {
+                                    _logger.LogWarning(cpEx, "Error updating checkpoint");
                                 }
                             }
                             catch (Exception ex)

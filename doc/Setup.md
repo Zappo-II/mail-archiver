@@ -260,7 +260,7 @@ The optional MCP (Model Context Protocol) server exposes the same read-only mail
 ### 📨 MailSync Settings
 - `MailSync__IntervalMinutes`: The interval in minutes between email synchronization. This is the global default; each account can override it individually from the Create/Edit page (leave empty to use this default).
 - `MailSync__FullSyncIntervalHours`: Optional global default for automatic full resyncs, in hours. When unset (the default), no automatic full sync runs unless a per-account `FullSyncIntervalHours` value is set on the Create/Edit page. Per-account values override this global default.
-- `MailSync__TimeoutMinutes`: The timeout for the sync operation in minutes.
+- `MailSync__TimeoutMinutes`: Per-account sync timeout in minutes. A sync that runs longer stops at the next message boundary, keeps its checkpoints and resumes on the next run; the job is reported as `Timed Out` and `LastSync` is not advanced. `0` or any non-positive value means no timeout. **This setting previously had no effect** — the token carrying it was never consulted — so review it before upgrading if you sync large mailboxes. See [Synchronization.md](Synchronization.md#-stopping-a-sync-early).
 - `MailSync__ConnectionTimeoutSeconds`: The connection timeout for IMAP connections in seconds.
 - `MailSync__CommandTimeoutSeconds`: The command timeout for IMAP commands in seconds.
 - `MailSync__AlwaysForceFullSync`: Whether to always force a full sync (true/false).

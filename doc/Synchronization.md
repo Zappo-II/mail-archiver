@@ -104,7 +104,7 @@ The sync behavior is controlled by the `MailSync` section of `appsettings.json` 
 |---------|---------|-------------|
 | `MailSync:IntervalMinutes` | `15` | Global default for the per-account sync interval, in minutes. Each account can override this on the Create/Edit page (leave empty to use this default). |
 | `MailSync:FullSyncIntervalHours` | _unset_ | Optional global default for automatic full resyncs, in hours. When unset (the default), no automatic full sync runs unless a per-account `FullSyncIntervalHours` value is set. Per-account values override this. |
-| `MailSync:TimeoutMinutes` | `120` | Per-account sync timeout. If an account takes longer, its sync is cancelled and retried next cycle. |
+| `MailSync:TimeoutMinutes` | `120` | Per-account sync timeout. A sync that runs longer stops at the next message boundary and resumes on the next run. `0` (or any non-positive value) means no timeout. See [Stopping a Sync Early](#-stopping-a-sync-early) — **this setting had no effect before and does now.** |
 | `MailSync:ConnectionTimeoutSeconds` | `300` | IMAP connection timeout. |
 | `MailSync:CommandTimeoutSeconds` | `600` | IMAP command timeout. |
 | `MailSync:AlwaysForceFullSync` | `false` | When `true`, every cycle is a Full Sync for all accounts. **Diagnostics only – keep off in production.** |
@@ -298,6 +298,49 @@ Applies to both providers, IMAP and M365 (Graph).
 
 ---
 
+## ⏹️ Stopping a Sync Early
+
+A running sync stops before it has worked through every folder for exactly two reasons: somebody
+cancels the job on the **Jobs** page, or the account's `MailSync:TimeoutMinutes` elapses. Both are
+checked at three points — before each folder, before each batch, and before every single message —
+so neither has to wait for a large folder to finish.
+
+The two end the job differently, and the difference matters:
+
+| | Job status | `LastSync` | Checkpoints | Retention passes |
+|---|---|---|---|---|
+| Cancelled from the UI | `Failed`, with "Job was cancelled" | not advanced | kept | skipped |
+| Sync timeout elapsed | `Timed Out` | not advanced | kept | skipped |
+
+A timeout is a **pause, not a failure**. The sync stops where it is, keeps what it has archived,
+leaves `LastSync` untouched and skips the server-side and local retention passes — running those
+would defeat the point of bounding the runtime. The next scheduled run resumes from the checkpoint.
+
+### Checkpoints
+
+Progress is recorded per account and folder in `mail_archiver.SyncCheckpoints`: the date and
+Message-ID of the last message archived in that folder. Every installation writes them — they used
+to be tied to `BandwidthTracking:Enabled`, which meant an interrupted sync could only resume where
+that unrelated feature happened to be switched on. The checkpoints are dropped again as soon as an
+account completes without failures.
+
+A checkpoint is only ever honoured when it is **newer** than the account's `LastSync`, so a stale
+one cannot move the watermark backwards or skip mail that `LastSync` would still have covered.
+
+### Before you rely on the timeout
+
+`MailSync:TimeoutMinutes` was documented but not wired up: the cancellation token carrying it was
+created and never consulted, so a sync ran unbounded no matter what the setting said. It now does
+what the documentation always claimed.
+
+That is a behaviour change for installations with large mailboxes. A first full sync of a mailbox
+with 150,000 messages runs for hours, and a timeout shorter than that would stop it every time. It
+resumes from its checkpoint rather than starting over, but the account will not reach a completed
+state — and therefore will not advance `LastSync` — until one run gets all the way through. Review
+the value before upgrading, and set it to `0` if you would rather have no timeout at all.
+
+---
+
 ## 👀 Observing the Sync
 
 - **Account Details page**: Shows the current `LastSync` timestamp and the active sync job (folder, processed count, new count, failed count). The **Full Resync** button is located here.
@@ -307,5 +350,6 @@ Applies to both providers, IMAP and M365 (Graph).
   ```
   See [Docker Compose Logs Guide](DockerComposeLogs.md) for log filtering tips.
 - **Rate limiting**: When a sync is paused due to bandwidth limits, the account shows "Rate-Limited" status and resumes automatically after the reset window. See [Rate Limit Handling](RateLimitHandling.md).
+- **Timeouts**: A sync stopped by `MailSync:TimeoutMinutes` shows "Timed Out" and resumes from its checkpoint on the next run. See [Stopping a Sync Early](#-stopping-a-sync-early).
 
 ---

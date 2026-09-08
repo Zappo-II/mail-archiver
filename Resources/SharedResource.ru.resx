@@ -2512,6 +2512,9 @@
   <data name="RateLimited" xml:space="preserve">
     <value>Лимит скорости достигнут</value>
   </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Время ожидания истекло</value>
+  </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>Прогресс измеряется по завершённым папкам. Большая папка (напр. INBOX) удерживает полосу на 0%, пока не завершится.</value>
   </data>

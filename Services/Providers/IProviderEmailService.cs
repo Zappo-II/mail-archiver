@@ -12,8 +12,12 @@ namespace MailArchiver.Services.Providers
         /// </summary>
         /// <param name="account">The mail account to sync</param>
         /// <param name="jobId">Optional sync job ID for progress tracking</param>
+        /// <param name="cancellationToken">
+        /// Cancels the sync. The background service passes the per-account sync timeout here, so a
+        /// long-running sync can be stopped between message batches instead of only between folders.
+        /// </param>
         /// <returns>Task</returns>
-        Task SyncMailAccountAsync(MailAccount account, string? jobId = null);
+        Task SyncMailAccountAsync(MailAccount account, string? jobId = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Tests the connection to the email provider

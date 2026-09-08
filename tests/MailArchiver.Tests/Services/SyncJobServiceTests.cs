@@ -431,6 +431,36 @@ public class SyncJobServiceTests
         }
     }
 
+    [Fact]
+    public async Task CompleteJobTimedOut_SetsTimedOutAndRemovesFromActive()
+    {
+        // The timeout is a pause, not a failure, so it gets its own terminal status rather than
+        // borrowing RateLimited (which would misreport the reason in the jobs list) or Failed
+        // (which would suggest something went wrong). And like the rate-limited path it has to
+        // release the account, or the next scheduled run could never pick the account up again.
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            var svc = CreateService(ctx);
+            var jobId = await svc.StartSyncAsync(acct.Id, acct.Name);
+            svc.CompleteJobTimedOut(jobId!, "timeout after 60 minutes");
+
+            var job = svc.GetJob(jobId!);
+            Assert.Equal(SyncJobStatus.TimedOut, job!.Status);
+            Assert.Equal("timeout after 60 minutes", job.ErrorMessage);
+            Assert.False(svc.IsAccountSyncing(acct.Id));
+
+            var j2 = await svc.StartSyncAsync(acct.Id, acct.Name);
+            Assert.NotNull(j2);
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
     // ============================================================
     // CancelJob / CancelJobsForAccount
     // ============================================================

@@ -41,8 +41,8 @@ namespace MailArchiver.Services.Providers
         // IGraphEmailService
         // ========================================
 
-        public Task SyncMailAccountAsync(MailAccount account, string? jobId = null)
-            => _syncService.SyncMailAccountAsync(account, jobId);
+        public Task SyncMailAccountAsync(MailAccount account, string? jobId = null, CancellationToken cancellationToken = default)
+            => _syncService.SyncMailAccountAsync(account, jobId, cancellationToken);
 
         public Task<bool> TestConnectionAsync(MailAccount account)
             => _syncService.TestConnectionAsync(account);

@@ -2558,6 +2558,9 @@
   <data name="RateLimited" xml:space="preserve">
     <value>Limit prędkości osiągnięty</value>
   </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Przekroczono limit czasu</value>
+  </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>Postęp jest mierzony według ukończonych folderów. Duży folder (np. INBOX) utrzymuje pasek na 0%, dopóki się nie zakończy.</value>
   </data>

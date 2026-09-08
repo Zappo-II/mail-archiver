@@ -8,7 +8,7 @@ namespace MailArchiver.Services.Providers
     /// </summary>
     public class ImportEmailService : IProviderEmailService
     {
-        public Task SyncMailAccountAsync(MailAccount account, string? jobId = null)
+        public Task SyncMailAccountAsync(MailAccount account, string? jobId = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException("Import provider does not support sync operations");
         }
