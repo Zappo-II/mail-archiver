@@ -635,28 +635,37 @@ namespace MailArchiver.Services.Providers.Imap
                 var lastSync = account.LastSync;
                 bool isFullSync = account.LastSync == new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-                // Resume from checkpoint if available for this folder. A checkpoint is only ever
-                // honoured when it is newer than LastSync, so a stale one can never move the
-                // watermark backwards or skip mail LastSync would still have covered.
+                // Resume watermark for this folder. The search below is deliberately left exactly as
+                // it would have been without a checkpoint; only the UIDs already archived are dropped
+                // from its result afterwards. That is what makes a resume safe — the search window
+                // never moves, so nothing can fall out of it.
+                //
+                // A checkpoint from a folder the server has renumbered since is worthless, because the
+                // stored UID now points at a different message. UIDVALIDITY has to match, otherwise the
+                // folder is read in full.
+                uint resumeAfterUid = 0;
                 try
                 {
                     var checkpoints = await _bandwidthService.GetCheckpointsAsync(account.Id);
                     var folderCheckpoint = checkpoints.FirstOrDefault(c => c.FolderName == folder.FullName);
-                    if (folderCheckpoint?.LastMessageDate.HasValue == true)
+                    resumeAfterUid = SyncResumePoint.ResolveAfterUid(
+                        folderCheckpoint?.LastUid, folderCheckpoint?.UidValidity, folder.UidValidity);
+
+                    if (resumeAfterUid > 0)
                     {
-                        var checkpointDate = folderCheckpoint.LastMessageDate.Value;
-                        if (checkpointDate > lastSync)
-                        {
-                            _logger.LogInformation("Resuming folder {FolderName} from checkpoint date {CheckpointDate} " +
-                                "(LastSync was {LastSync})", folder.FullName, checkpointDate, lastSync);
-                            lastSync = checkpointDate;
-                            isFullSync = false;
-                        }
+                        _logger.LogInformation("Resuming folder {FolderName} after UID {LastUid}",
+                            folder.FullName, resumeAfterUid);
+                    }
+                    else if (folderCheckpoint?.LastUid > 0)
+                    {
+                        _logger.LogInformation("Discarding checkpoint for folder {FolderName}: UIDVALIDITY is {Current}, " +
+                            "the checkpoint was written under {Stored}. Reading the folder in full.",
+                            folder.FullName, folder.UidValidity, folderCheckpoint.UidValidity);
                     }
                 }
                 catch (Exception cpEx)
                 {
-                    _logger.LogWarning(cpEx, "Error reading checkpoints for folder {FolderName}, using LastSync", folder.FullName);
+                    _logger.LogWarning(cpEx, "Error reading checkpoints for folder {FolderName}, reading it in full", folder.FullName);
                 }
 
                 if (!isFullSync)
@@ -752,6 +761,19 @@ namespace MailArchiver.Services.Providers.Imap
                                     uids.Count, folder.FullName);
                             }
                         }
+                    }
+
+                    // Ascending order, so the recorded UID is a real watermark and not merely the last
+                    // one this run happened to see. SEARCH results normally arrive ascending; relying
+                    // on that silently would make the resume wrong on a server that does not.
+                    uids = uids.OrderBy(u => u.Id).ToList();
+
+                    if (resumeAfterUid > 0)
+                    {
+                        var beforeResume = uids.Count;
+                        uids = uids.Where(u => u.Id > resumeAfterUid).ToList();
+                        _logger.LogInformation("Checkpoint for folder {FolderName} skips {Skipped} of {Total} messages already archived",
+                            folder.FullName, beforeResume - uids.Count, beforeResume);
                     }
 
                     _logger.LogInformation("Found {Count} messages to process in folder {FolderName} for account: {AccountName}",
@@ -1064,7 +1086,7 @@ namespace MailArchiver.Services.Providers.Imap
                                             await _bandwidthService.UpdateCheckpointAsync(
                                                 account.Id, folder.FullName,
                                                 message.Date.DateTime, message.MessageId,
-                                                messageSize);
+                                                messageSize, uid.Id, folder.UidValidity);
 
                                             result.WasRateLimited = true;
                                             return result;
@@ -1106,7 +1128,7 @@ namespace MailArchiver.Services.Providers.Imap
                                     await _bandwidthService.UpdateCheckpointAsync(
                                         account.Id, folder.FullName,
                                         message.Date.DateTime, message.MessageId,
-                                        messageSize);
+                                        messageSize, uid.Id, folder.UidValidity);
                                 }
                                 catch (Exception cpEx)
                                 {

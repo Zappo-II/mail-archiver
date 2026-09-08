@@ -46,6 +46,26 @@ namespace MailArchiver.Models
         public string? LastMessageId { get; set; }
 
         /// <summary>
+        /// UID of the last message processed in this folder, and the folder's UIDVALIDITY at that
+        /// moment. Together they are the resume watermark: the folder search runs unchanged and the
+        /// UIDs at or below <see cref="LastUid"/> are dropped from its result, so a resumed sync
+        /// picks up exactly where it stopped without moving the search window.
+        ///
+        /// <see cref="LastMessageDate"/> cannot serve that purpose. It holds the Date header of the
+        /// last processed message, the search asks the server for INTERNALDATE, and messages are
+        /// processed in UID order rather than date order — so a date watermark can silently skip
+        /// messages the search would otherwise have returned.
+        ///
+        /// A checkpoint whose <see cref="UidValidity"/> no longer matches the folder is worthless:
+        /// the server has renumbered, and the stored UID now points at a different message. Such a
+        /// checkpoint is discarded and the folder is read in full.
+        /// </summary>
+        public long? LastUid { get; set; }
+
+        /// <inheritdoc cref="LastUid"/>
+        public long? UidValidity { get; set; }
+
+        /// <summary>
         /// Number of messages processed in this folder so far.
         /// </summary>
         [Required]

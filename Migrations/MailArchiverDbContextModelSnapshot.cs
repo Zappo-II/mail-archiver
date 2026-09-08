@@ -712,11 +712,17 @@ namespace MailArchiver.Migrations
                     b.Property<string>("LastMessageId")
                         .HasColumnType("text");
 
+                    b.Property<long?>("LastUid")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("MailAccountId")
                         .HasColumnType("integer");
 
                     b.Property<int>("ProcessedCount")
                         .HasColumnType("integer");
+
+                    b.Property<long?>("UidValidity")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");

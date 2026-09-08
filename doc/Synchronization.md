@@ -318,14 +318,27 @@ would defeat the point of bounding the runtime. The next scheduled run resumes f
 
 ### Checkpoints
 
-Progress is recorded per account and folder in `mail_archiver.SyncCheckpoints`: the date and
-Message-ID of the last message archived in that folder. Every installation writes them — they used
-to be tied to `BandwidthTracking:Enabled`, which meant an interrupted sync could only resume where
-that unrelated feature happened to be switched on. The checkpoints are dropped again as soon as an
-account completes without failures.
+Progress is recorded per account and folder in `mail_archiver.SyncCheckpoints`: the UID of the last
+message archived in that folder, together with the folder's UIDVALIDITY at that moment. Every
+installation writes them — they used to be tied to `BandwidthTracking:Enabled`, which meant an
+interrupted sync could only resume where that unrelated feature happened to be switched on. The
+checkpoints are dropped again as soon as an account completes without failures.
 
-A checkpoint is only ever honoured when it is **newer** than the account's `LastSync`, so a stale
-one cannot move the watermark backwards or skip mail that `LastSync` would still have covered.
+A resumed folder runs **exactly the same search** it would have run without a checkpoint. Only the
+UIDs at or below the watermark are dropped from the result afterwards, so the search window never
+moves and no message can fall out of it.
+
+The checkpoint is ignored — and the folder read in full — whenever it cannot be proven to apply:
+no UID recorded yet, no UIDVALIDITY recorded, or a UIDVALIDITY that no longer matches the folder.
+The last case means the server renumbered the mailbox, so the stored UID names a different message.
+Re-reading a folder costs time and is absorbed by the duplicate check; skipping one would lose mail
+silently, so every doubtful case reads in full.
+
+> ℹ️ Before this, the checkpoint stored the **Date header** of the last archived message and fed it
+> into the folder search — which the server answers by INTERNALDATE, a different clock that can be
+> years off on migrated mail — while messages are processed in UID order rather than date order.
+> Both mismatches could move the search window past mail that had never been archived. The same path
+> is used when a sync pauses on a bandwidth limit, so that resume is fixed by this change too.
 
 ### Before you rely on the timeout
 
