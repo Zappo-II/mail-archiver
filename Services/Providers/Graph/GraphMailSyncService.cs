@@ -415,8 +415,8 @@ namespace MailArchiver.Services.Providers.Graph
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error syncing Graph API folder {FolderName}: {Message}",
-                    folder.DisplayName, ex.Message);
+                _logger.LogError(ex, "Error syncing Graph API folder {FolderName} for account {AccountName}: {Message}",
+                    folder.DisplayName, account.Name, ex.Message);
                 result.FailedFolders = 1;
             }
 

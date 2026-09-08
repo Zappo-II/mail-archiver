@@ -1143,15 +1143,15 @@ namespace MailArchiver.Services.Providers.Imap
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error searching messages in folder {FolderName}: {Message}",
-                        folder.FullName, ex.Message);
+                    _logger.LogError(ex, "Error searching messages in folder {FolderName} for account {AccountName}: {Message}",
+                        folder.FullName, account.Name, ex.Message);
                     result.FailedFolders = 1;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error syncing folder {FolderName}: {Message}",
-                    folder.FullName, ex.Message);
+                _logger.LogError(ex, "Error syncing folder {FolderName} for account {AccountName}: {Message}",
+                    folder.FullName, account.Name, ex.Message);
                 result.FailedFolders = 1;
             }
 
