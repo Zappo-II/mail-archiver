@@ -614,6 +614,14 @@ namespace MailArchiver.Services.Providers.Imap
             var consecutiveTransientFailures = 0;
             var circuitBreaker = new ReconnectCircuitBreaker(MaxConsecutiveReconnectFailures);
 
+            // Set as soon as one message in this folder fails. From then on the resume watermark
+            // must not move any further: messages are walked in ascending UID order, so a watermark
+            // above a failed UID would tell the next run that the failed message is already
+            // archived, and it would never be attempted again. That is precisely what the LastSync
+            // bar exists to prevent - it holds the account back so failures ARE retried - so a
+            // watermark that outruns a failure would quietly defeat it and lose the message.
+            var watermarkFrozen = false;
+
 
             _logger.LogInformation("Syncing folder: {FolderName} for account: {AccountName}",
                 folder.FullName, account.Name);
@@ -653,8 +661,8 @@ namespace MailArchiver.Services.Providers.Imap
 
                     if (resumeAfterUid > 0)
                     {
-                        _logger.LogInformation("Resuming folder {FolderName} after UID {LastUid}",
-                            folder.FullName, resumeAfterUid);
+                        _logger.LogInformation("Resuming folder {FolderName} for account {AccountName} after UID {LastUid}",
+                            folder.FullName, account.Name, resumeAfterUid);
                     }
                     else if (folderCheckpoint?.LastUid > 0)
                     {
@@ -772,8 +780,8 @@ namespace MailArchiver.Services.Providers.Imap
                     {
                         var beforeResume = uids.Count;
                         uids = uids.Where(u => u.Id > resumeAfterUid).ToList();
-                        _logger.LogInformation("Checkpoint for folder {FolderName} skips {Skipped} of {Total} messages already archived",
-                            folder.FullName, beforeResume - uids.Count, beforeResume);
+                        _logger.LogInformation("Checkpoint for folder {FolderName} of account {AccountName} skips {Skipped} of {Total} messages already archived",
+                            folder.FullName, account.Name, beforeResume - uids.Count, beforeResume);
                     }
 
                     _logger.LogInformation("Found {Count} messages to process in folder {FolderName} for account: {AccountName}",
@@ -1123,16 +1131,25 @@ namespace MailArchiver.Services.Providers.Imap
                                 // only ever resume where that feature happened to be switched on.
                                 // messageSize is 0 unless bandwidth tracking computed it; the byte
                                 // tally on the checkpoint simply stays at 0 then.
-                                try
+                                //
+                                // Not written once anything in this folder has failed: the watermark
+                                // has to keep meaning "everything at or below this is archived".
+                                //
+                                // Skipped once anything in this folder has failed, so the watermark
+                                // keeps meaning "everything at or below this is archived".
+                                if (!watermarkFrozen)
                                 {
-                                    await _bandwidthService.UpdateCheckpointAsync(
-                                        account.Id, folder.FullName,
-                                        message.Date.DateTime, message.MessageId,
-                                        messageSize, uid.Id, folder.UidValidity);
-                                }
-                                catch (Exception cpEx)
-                                {
-                                    _logger.LogWarning(cpEx, "Error updating checkpoint");
+                                    try
+                                    {
+                                        await _bandwidthService.UpdateCheckpointAsync(
+                                            account.Id, folder.FullName,
+                                            message.Date.DateTime, message.MessageId,
+                                            messageSize, uid.Id, folder.UidValidity);
+                                    }
+                                    catch (Exception cpEx)
+                                    {
+                                        _logger.LogWarning(cpEx, "Error updating checkpoint");
+                                    }
                                 }
                             }
                             catch (Exception ex)
@@ -1187,6 +1204,11 @@ namespace MailArchiver.Services.Providers.Imap
                                     folder.FullName, emailSubject, emailFrom, emailDate, emailMessageId, uid, isUtf8Error, innermostEx.Message);
 
                                 result.FailedEmails++;
+
+                                // From here on this folder's watermark stays where it is. Anything
+                                // above this UID is read again on the next run, which is the price
+                                // of never skipping the message that just failed.
+                                watermarkFrozen = true;
                             }
                         }
 

@@ -328,6 +328,12 @@ A resumed folder runs **exactly the same search** it would have run without a ch
 UIDs at or below the watermark are dropped from the result afterwards, so the search window never
 moves and no message can fall out of it.
 
+The watermark stops advancing as soon as a message in that folder fails. Messages are walked in
+ascending UID order, so a watermark above a failed UID would tell the next run that the failed
+message is already archived and it would never be retried — which is exactly what the held-back
+`LastSync` exists to force. Everything above the failure is therefore read again next time; that
+costs a re-read and the duplicate check absorbs it.
+
 The checkpoint is ignored — and the folder read in full — whenever it cannot be proven to apply:
 no UID recorded yet, no UIDVALIDITY recorded, or a UIDVALIDITY that no longer matches the folder.
 The last case means the server renumbered the mailbox, so the stored UID names a different message.
