@@ -165,8 +165,9 @@ namespace MailArchiver.Services.Providers.Graph
                     // ended with failures is one whose account stays held back, and that is not
                     // visible anywhere else in this line.
                     _logger.LogWarning("Graph API sync for account {AccountName} stopped at the configured sync timeout. " +
-                        "LastSync will NOT be updated. Processed: {Processed}, New: {New}, Failed: {Failed}",
-                        account.Name, processedEmails, newEmails, failedEmails);
+                        "LastSync will NOT be updated. Processed: {Processed}, New: {New}, " +
+                        "Failed: {Failed}, Failed folders: {FailedFolders}",
+                        account.Name, processedEmails, newEmails, failedEmails, failedFolders);
 
                     if (jobId != null)
                     {

@@ -236,9 +236,10 @@ namespace MailArchiver.Services.Providers.Imap
                     _logger.LogWarning("Sync for account {AccountName} stopped at the configured sync timeout. " +
                         "Preserving checkpoints for resume. LastSync will NOT be updated. " +
                         "Processed: {Processed}, New: {New}, Failed: {Failed}, " +
-                        "Recovered: {Recovered}, Provider placeholders: {ProviderPlaceholders}",
+                        "Recovered: {Recovered}, Provider placeholders: {ProviderPlaceholders}, " +
+                        "Failed folders: {FailedFolders}, Missing folders: {MissingFolders}",
                         account.Name, processedEmails, newEmails, failedEmails,
-                        recoveredEmails, providerPlaceholderEmails);
+                        recoveredEmails, providerPlaceholderEmails, failedFolders, missingFolders);
 
                     await client.DisconnectAsync(true);
 
