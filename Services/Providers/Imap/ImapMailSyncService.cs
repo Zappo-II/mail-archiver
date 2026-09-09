@@ -105,6 +105,8 @@ namespace MailArchiver.Services.Providers.Imap
             var processedEmails = 0;
             var newEmails = 0;
             var failedEmails = 0;
+            var failedFolders = 0;
+            var missingFolders = 0;
             var recoveredEmails = 0;
             var providerPlaceholderEmails = 0;
             var deletedEmails = 0;
@@ -165,6 +167,8 @@ namespace MailArchiver.Services.Providers.Imap
                         processedEmails += folderResult.ProcessedEmails;
                         newEmails += folderResult.NewEmails;
                         failedEmails += folderResult.FailedEmails;
+                        failedFolders += folderResult.FailedFolders;
+                        missingFolders += folderResult.MissingFolders;
                         recoveredEmails += folderResult.RecoveredEmails;
                         providerPlaceholderEmails += folderResult.ProviderPlaceholderEmails;
 
@@ -191,9 +195,18 @@ namespace MailArchiver.Services.Providers.Imap
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error syncing folder {FolderName} for account {AccountName}: {Message}",
-                            folder.FullName, account.Name, ex.Message);
-                        failedEmails++;
+                        if (ImapFolderAbsence.IsFolderGone(ex))
+                        {
+                            _logger.LogInformation("Folder {FolderName} for account {AccountName} is reported by the server " +
+                                "but does not exist; skipping it. {Message}", folder.FullName, account.Name, ex.Message);
+                            missingFolders++;
+                        }
+                        else
+                        {
+                            _logger.LogError(ex, "Error syncing folder {FolderName} for account {AccountName}: {Message}",
+                                folder.FullName, account.Name, ex.Message);
+                            failedFolders++;
+                        }
                     }
                 }
 
@@ -233,7 +246,7 @@ namespace MailArchiver.Services.Providers.Imap
                     return;
                 }
 
-                if (failedEmails == 0)
+                if (SyncCompletionPolicy.MayAdvanceLastSync(failedEmails, failedFolders))
                 {
                     var trackedAccount = await _context.MailAccounts.FindAsync(account.Id);
                     if (trackedAccount != null)
@@ -250,14 +263,17 @@ namespace MailArchiver.Services.Providers.Imap
                 }
                 else
                 {
-                    _logger.LogWarning("Not updating LastSync for account {AccountName} due to {FailedCount} failed emails",
-                        account.Name, failedEmails);
+                    _logger.LogWarning("Not updating LastSync for account {AccountName}: {FailedCount} failed emails, " +
+                        "{FailedFolderCount} folders that could not be synced at all",
+                        account.Name, failedEmails, failedFolders);
                 }
 
                 await client.DisconnectAsync(true);
                 _logger.LogInformation("Sync completed for account: {AccountName}. New: {New}, Failed: {Failed}, Deleted: {Deleted}, " +
-                    "Recovered: {Recovered}, Provider placeholders: {ProviderPlaceholders}",
-                    account.Name, newEmails, failedEmails, deletedEmails, recoveredEmails, providerPlaceholderEmails);
+                    "Recovered: {Recovered}, Provider placeholders: {ProviderPlaceholders}, " +
+                    "Failed folders: {FailedFolders}, Missing folders: {MissingFolders}",
+                    account.Name, newEmails, failedEmails, deletedEmails, recoveredEmails, providerPlaceholderEmails,
+                    failedFolders, missingFolders);
 
                 if (jobId != null)
                 {
@@ -1140,16 +1156,34 @@ namespace MailArchiver.Services.Providers.Imap
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error searching messages in folder {FolderName}: {Message}",
-                        folder.FullName, ex.Message);
-                    result.FailedEmails = result.ProcessedEmails;
+                    if (ImapFolderAbsence.IsFolderGone(ex))
+                    {
+                        _logger.LogInformation("Folder {FolderName} for account {AccountName} is reported by the server " +
+                            "but does not exist; skipping it. {Message}", folder.FullName, account.Name, ex.Message);
+                        result.MissingFolders = 1;
+                    }
+                    else
+                    {
+                        _logger.LogError(ex, "Error searching messages in folder {FolderName} for account {AccountName}: {Message}",
+                            folder.FullName, account.Name, ex.Message);
+                        result.FailedFolders = 1;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error syncing folder {FolderName}: {Message}",
-                    folder.FullName, ex.Message);
-                result.FailedEmails = result.ProcessedEmails;
+                if (ImapFolderAbsence.IsFolderGone(ex))
+                {
+                    _logger.LogInformation("Folder {FolderName} for account {AccountName} is reported by the server " +
+                        "but does not exist; skipping it. {Message}", folder.FullName, account.Name, ex.Message);
+                    result.MissingFolders = 1;
+                }
+                else
+                {
+                    _logger.LogError(ex, "Error syncing folder {FolderName} for account {AccountName}: {Message}",
+                        folder.FullName, account.Name, ex.Message);
+                    result.FailedFolders = 1;
+                }
             }
 
             return result;
@@ -1446,6 +1480,21 @@ namespace MailArchiver.Services.Providers.Imap
             /// retrieval-error placeholder rather than the original message.
             /// </summary>
             public int ProviderPlaceholderEmails { get; set; }
+
+            /// <summary>
+            /// 1 when the folder failed as a unit — it could not be opened or searched, so no
+            /// statement can be made about the messages in it. Deliberately not expressed as a
+            /// number of failed messages: the count would be invented, and it would overwrite the
+            /// real per-message failures of that folder.
+            /// </summary>
+            public int FailedFolders { get; set; }
+
+            /// <summary>
+            /// 1 when the server reported the folder through discovery and then said it does not
+            /// exist. Deliberately not a failure: nothing can be retried, so counting it would hold
+            /// LastSync back forever. See <see cref="ImapFolderAbsence"/>.
+            /// </summary>
+            public int MissingFolders { get; set; }
 
             public long BytesDownloaded { get; set; }
             public bool WasRateLimited { get; set; }

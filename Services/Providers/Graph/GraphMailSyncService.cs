@@ -63,6 +63,7 @@ namespace MailArchiver.Services.Providers.Graph
                 var processedEmails = 0;
                 var newEmails = 0;
                 var failedEmails = 0;
+                var failedFolders = 0;
 
                 var folders = await _folderService.GetAllMailFoldersAsync(graphClient, account.EmailAddress);
 
@@ -118,6 +119,7 @@ namespace MailArchiver.Services.Providers.Graph
                         processedEmails += folderResult.ProcessedEmails;
                         newEmails += folderResult.NewEmails;
                         failedEmails += folderResult.FailedEmails;
+                        failedFolders += folderResult.FailedFolders;
 
                         processedFolders++;
 
@@ -136,7 +138,7 @@ namespace MailArchiver.Services.Providers.Graph
                     {
                         _logger.LogError(ex, "Error syncing folder {FolderName} for account {AccountName}: {Message}",
                             folder.DisplayName, account.Name, ex.Message);
-                        failedEmails++;
+                        failedFolders++;
                     }
                 }
 
@@ -147,7 +149,7 @@ namespace MailArchiver.Services.Providers.Graph
                     deletedEmails = await DeleteOldEmailsAsync(graphClient, account);
                 }
 
-                if (failedEmails == 0)
+                if (SyncCompletionPolicy.MayAdvanceLastSync(failedEmails, failedFolders))
                 {
                     var trackedAccount = await _context.MailAccounts.FindAsync(account.Id);
                     if (trackedAccount != null)
@@ -158,12 +160,14 @@ namespace MailArchiver.Services.Providers.Graph
                 }
                 else
                 {
-                    _logger.LogWarning("Not updating LastSync for account {AccountName} due to {FailedCount} failed emails",
-                        account.Name, failedEmails);
+                    _logger.LogWarning("Not updating LastSync for account {AccountName}: {FailedCount} failed emails, " +
+                        "{FailedFolderCount} folders that could not be synced at all",
+                        account.Name, failedEmails, failedFolders);
                 }
 
-                _logger.LogInformation("Graph API sync completed for account: {AccountName}. New: {New}, Failed: {Failed}, Deleted: {Deleted}",
-                    account.Name, newEmails, failedEmails, deletedEmails);
+                _logger.LogInformation("Graph API sync completed for account: {AccountName}. New: {New}, Failed: {Failed}, Deleted: {Deleted}, " +
+                    "Failed folders: {FailedFolders}",
+                    account.Name, newEmails, failedEmails, deletedEmails, failedFolders);
 
                 if (jobId != null)
                 {
@@ -411,9 +415,9 @@ namespace MailArchiver.Services.Providers.Graph
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error syncing Graph API folder {FolderName}: {Message}",
-                    folder.DisplayName, ex.Message);
-                result.FailedEmails = result.ProcessedEmails;
+                _logger.LogError(ex, "Error syncing Graph API folder {FolderName} for account {AccountName}: {Message}",
+                    folder.DisplayName, account.Name, ex.Message);
+                result.FailedFolders = 1;
             }
 
             return result;
@@ -985,6 +989,13 @@ namespace MailArchiver.Services.Providers.Graph
             public int ProcessedEmails { get; set; }
             public int NewEmails { get; set; }
             public int FailedEmails { get; set; }
+
+            /// <summary>
+            /// 1 when the folder failed as a unit rather than message by message. Same meaning as
+            /// on the IMAP side, and counted the same way: one per folder, never converted into a
+            /// number of failed messages.
+            /// </summary>
+            public int FailedFolders { get; set; }
         }
     }
 }
