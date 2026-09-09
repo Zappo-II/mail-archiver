@@ -3290,9 +3290,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>La boîte aux lettres de destination doit être un compte IMAP.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>La boîte aux lettres de destination sélectionnée est désactivée.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Veuillez fournir soit une fenêtre de mois, soit une date de début.</value>
   </data>

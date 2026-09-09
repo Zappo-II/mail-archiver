@@ -3291,9 +3291,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Das Zielpostfach muss ein IMAP-Konto sein.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Das gewählte Zielpostfach ist deaktiviert.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Bitte entweder ein Monatsfenster oder ein Von-Datum angeben.</value>
   </data>

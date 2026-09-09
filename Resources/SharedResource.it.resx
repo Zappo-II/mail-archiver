@@ -3290,9 +3290,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>La casella di destinazione deve essere un account IMAP.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>La casella di destinazione selezionata è disabilitata.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Fornire una finestra di mesi o una data di inizio.</value>
   </data>

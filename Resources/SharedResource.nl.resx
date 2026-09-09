@@ -3290,9 +3290,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Het doelpostvak moet een IMAP-account zijn.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Het geselecteerde doelpostvak is uitgeschakeld.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Geef een maandvenster of een vanaf-datum op.</value>
   </data>

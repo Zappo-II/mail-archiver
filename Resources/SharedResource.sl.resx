@@ -3290,9 +3290,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Ciljni nabiralnik mora biti račun IMAP.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Izbrani ciljni nabiralnik je onemogočen.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Navedite okno mesecev ali datum od.</value>
   </data>

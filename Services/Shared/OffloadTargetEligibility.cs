@@ -16,7 +16,6 @@ namespace MailArchiver.Services.Shared
         NotFound,
         NotAccessible,
         NotImap,
-        Disabled,
     }
 
     /// <summary>The facts about a candidate target that decide whether it may be used.</summary>
@@ -24,7 +23,6 @@ namespace MailArchiver.Services.Shared
     {
         public int Id { get; init; }
         public ProviderType Provider { get; init; }
-        public bool IsEnabled { get; init; }
 
         /// <summary>
         /// Whether the acting user may use this account, as resolved by
@@ -51,9 +49,15 @@ namespace MailArchiver.Services.Shared
             => allowedAccountIds == null || allowedAccountIds.Contains(accountId);
 
         /// <summary>
-        /// Order matters. Accessibility is decided before the provider and the enabled flag,
-        /// because a message naming either of those about an account the user may not see would
-        /// disclose something about it.
+        /// Order matters. Accessibility is decided before the provider, because a message naming
+        /// the provider of an account the user may not see would disclose something about it.
+        ///
+        /// A disabled account is deliberately accepted. IsEnabled governs exactly one thing — which
+        /// accounts the background sync collects from — and an offload does not collect, it appends.
+        /// Reading "do not archive from here" as "do not write here" was a rule of our own making,
+        /// and it blocked the one workflow the feature exists for: provisioning the targets of a
+        /// migration disabled, filling them ahead of time, and letting people switch archiving on
+        /// themselves afterwards. The source side never had the check either.
         /// </summary>
         public static OffloadTargetRejection Evaluate(OffloadTargetCandidate? target, int sourceAccountId)
         {
@@ -61,7 +65,6 @@ namespace MailArchiver.Services.Shared
             if (target.Id == sourceAccountId) return OffloadTargetRejection.SameAsSource;
             if (!target.IsAccessible) return OffloadTargetRejection.NotAccessible;
             if (target.Provider != ProviderType.IMAP) return OffloadTargetRejection.NotImap;
-            if (!target.IsEnabled) return OffloadTargetRejection.Disabled;
             return OffloadTargetRejection.None;
         }
 
@@ -78,7 +81,6 @@ namespace MailArchiver.Services.Shared
             OffloadTargetRejection.NotFound => "OffloadTargetNotFound",
             OffloadTargetRejection.NotAccessible => "OffloadTargetNotFound",
             OffloadTargetRejection.NotImap => "OffloadTargetMustBeImap",
-            OffloadTargetRejection.Disabled => "OffloadTargetDisabled",
             _ => throw new ArgumentOutOfRangeException(nameof(rejection), rejection, "No message for an accepted target."),
         };
     }

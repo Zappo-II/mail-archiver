@@ -3289,9 +3289,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>El buzón de destino debe ser una cuenta IMAP.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>El buzón de destino seleccionado está deshabilitado.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Indique una ventana de meses o una fecha de inicio.</value>
   </data>

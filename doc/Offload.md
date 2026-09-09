@@ -156,7 +156,7 @@ Exit codes:
 |---|---|
 | `0` | Everything was appended or already present. |
 | `1` | At least one message failed, or the run itself failed. |
-| `2` | The invocation was wrong: bad or missing arguments, unknown account, target not IMAP, target disabled, source equal to target. |
+| `2` | The invocation was wrong: bad or missing arguments, unknown account, target not IMAP, source equal to target. |
 
 One invocation handles one mailbox, which makes a fleet of mailboxes scriptable from a CSV of
 source, target and cutoff.

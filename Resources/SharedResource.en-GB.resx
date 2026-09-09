@@ -686,9 +686,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>The target mailbox must be an IMAP account.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>The selected target mailbox is disabled.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Please provide either a month window or a from date.</value>
   </data>

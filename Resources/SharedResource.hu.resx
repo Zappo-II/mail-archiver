@@ -3282,9 +3282,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>A célpostafióknak IMAP-fióknak kell lennie.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>A kiválasztott célpostafiók le van tiltva.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Adjon meg hónap-ablakot vagy dátumtól értéket.</value>
   </data>

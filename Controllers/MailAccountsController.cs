@@ -1431,7 +1431,6 @@ namespace MailArchiver.Controllers
                     Id = target.Id,
                     // The Graph restore path is untouched by this feature.
                     Provider = target.Provider,
-                    IsEnabled = target.IsEnabled,
                     IsAccessible = OffloadTargetEligibility.IsAccessible(target.Id, allowedAccountIds),
                 },
                 id);
@@ -1563,7 +1562,6 @@ namespace MailArchiver.Controllers
                     {
                         Id = a.Id,
                         Provider = a.Provider,
-                        IsEnabled = a.IsEnabled,
                         IsAccessible = OffloadTargetEligibility.IsAccessible(a.Id, allowedAccountIds),
                     },
                     account.Id))

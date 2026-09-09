@@ -3336,9 +3336,6 @@
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Skrzynka docelowa musi być kontem IMAP.</value>
   </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Wybrana skrzynka docelowa jest wyłączona.</value>
-  </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Podaj okno miesięcy lub datę od.</value>
   </data>
