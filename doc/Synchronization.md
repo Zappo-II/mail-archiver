@@ -264,6 +264,36 @@ Both counts are visible at `Information` level, and the warning that names them 
 Not updating LastSync for account Example: 0 failed emails, 2 folders that could not be synced at all
 ```
 
+### Folders that are gone, as opposed to broken
+
+A folder the server lists and then refuses to open is not automatically a failure. The most common
+reason is not a fault at all: RFC 3501 forbids a server to remove a name from the subscription list
+when the mailbox behind it is deleted, so a folder somebody once subscribed to in an IMAP client is
+still reported by `LSUB` years later. Folder discovery takes the union of `LIST` and `LSUB`, so those
+names reach the sync, and `EXAMINE` then answers `NO ... doesn't exist`.
+
+That is an answer, not an error. There is nothing to retry and nothing to come back for, so it is
+counted separately and does **not** hold `LastSync` back:
+
+```
+Sync completed for account: Example. New: 120, Failed: 0, ..., Failed folders: 0, Missing folders: 16
+```
+
+Counting it as a failure would stop the account permanently, because a folder that does not exist
+never starts existing again. That is exactly what happened on a mailbox with 16 stale subscriptions:
+the account stopped advancing `LastSync` and could not recover on its own.
+
+Everything else stays a failure and keeps holding the account back — no permission, a dropped
+connection, throttling, a server error. Those can succeed on the next run.
+
+`Missing folders: N` is worth acting on even though it is harmless: it means the mailbox carries
+subscriptions to folders that no longer exist. Clearing them is an `UNSUBSCRIBE` per name, done with
+any IMAP client, and the sync deliberately does **not** do it — an archiver must not modify the
+mailbox it reads.
+
+IMAP only. Microsoft Graph enumerates folders through the API, where a deleted folder is simply not
+returned, so the situation cannot arise there.
+
 Applies to both providers, IMAP and M365 (Graph).
 
 ---
