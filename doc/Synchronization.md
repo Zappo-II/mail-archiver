@@ -104,7 +104,7 @@ The sync behavior is controlled by the `MailSync` section of `appsettings.json` 
 |---------|---------|-------------|
 | `MailSync:IntervalMinutes` | `15` | Global default for the per-account sync interval, in minutes. Each account can override this on the Create/Edit page (leave empty to use this default). |
 | `MailSync:FullSyncIntervalHours` | _unset_ | Optional global default for automatic full resyncs, in hours. When unset (the default), no automatic full sync runs unless a per-account `FullSyncIntervalHours` value is set. Per-account values override this. |
-| `MailSync:TimeoutMinutes` | `120` | Per-account sync timeout. A sync that runs longer stops at the next message boundary and resumes on the next run. `0` (or any non-positive value) means no timeout. See [Stopping a Sync Early](#-stopping-a-sync-early) — **this setting had no effect before and does now.** |
+| `MailSync:TimeoutMinutes` | `120` | Per-account sync timeout. A sync that runs longer stops at the next message boundary and resumes on the next run. `0` (or any non-positive value) means no timeout. See [Stopping a Sync Early](#-stopping-a-sync-early). |
 | `MailSync:ConnectionTimeoutSeconds` | `300` | IMAP connection timeout. |
 | `MailSync:CommandTimeoutSeconds` | `600` | IMAP command timeout. |
 | `MailSync:AlwaysForceFullSync` | `false` | When `true`, every cycle is a Full Sync for all accounts. **Diagnostics only – keep off in production.** |
@@ -302,11 +302,11 @@ Applies to both providers, IMAP and M365 (Graph).
 
 A running sync stops before it has worked through every folder for exactly two reasons: somebody
 cancels the job on the **Jobs** page, or the account's `MailSync:TimeoutMinutes` elapses. Both are
-checked at three points — before each folder, before each batch, and before every single message —
+checked at three points: before each folder, before each batch, and before every single message,
 so neither has to wait for a large folder to finish.
 
-The timeout applies to **scheduled syncs only**. A sync started from the UI — the "Sync now" action
-or a full resync — runs without a timeout, so a long manual sync is never cut short.
+The timeout applies to **scheduled syncs only**. A sync started from the UI, the "Sync now" action
+or a full resync, runs without a timeout, so a long manual sync is never cut short.
 
 The two end the job differently, and the difference matters:
 
@@ -316,14 +316,14 @@ The two end the job differently, and the difference matters:
 | Sync timeout elapsed | `Timed Out` | not advanced | kept | skipped |
 
 A timeout is a **pause, not a failure**. The sync stops where it is, keeps what it has archived,
-leaves `LastSync` untouched and skips the server-side and local retention passes — running those
-would defeat the point of bounding the runtime. The next scheduled run resumes from the checkpoint.
+leaves `LastSync` untouched and skips the server-side and local retention passes, because running
+those would defeat the point of bounding the runtime. The next scheduled run resumes from the checkpoint.
 
 ### Checkpoints
 
 Progress is recorded per account and folder in `mail_archiver.SyncCheckpoints`: the UID of the last
 message archived in that folder, together with the folder's UIDVALIDITY at that moment. Every
-installation writes them — they used to be tied to `BandwidthTracking:Enabled`, which meant an
+installation writes them; they used to be tied to `BandwidthTracking:Enabled`, which meant an
 interrupted sync could only resume where that unrelated feature happened to be switched on. The
 checkpoints are dropped again as soon as an account completes without failures.
 
@@ -333,37 +333,33 @@ moves and no message can fall out of it.
 
 The watermark stops advancing as soon as a message in that folder fails. Messages are walked in
 ascending UID order, so a watermark above a failed UID would tell the next run that the failed
-message is already archived and it would never be retried — which is exactly what the held-back
+message is already archived and it would never be retried, which is exactly what the held-back
 `LastSync` exists to force. Everything above the failure is therefore read again next time; that
 costs a re-read and the duplicate check absorbs it.
 
-The checkpoint is ignored — and the folder read in full — whenever it cannot be proven to apply:
+The checkpoint is ignored, and the folder read in full, whenever it cannot be proven to apply:
 no UID recorded yet, no UIDVALIDITY recorded, or a UIDVALIDITY that no longer matches the folder.
 The last case means the server renumbered the mailbox, so the stored UID names a different message.
 Re-reading a folder costs time and is absorbed by the duplicate check; skipping one would lose mail
 silently, so every doubtful case reads in full.
 
-The Graph API provider does not write UID checkpoints — the Graph API has no equivalent of IMAP's
-UIDs. A timed-out or bandwidth-limited M365 sync "resumes" only in the sense that `LastSync` is not
+The Graph API provider does not write UID checkpoints, because the Graph API has no equivalent of
+IMAP's UIDs. A timed-out or bandwidth-limited M365 sync "resumes" only in the sense that `LastSync` is not
 advanced, so the next run re-reads the whole window and the duplicate check absorbs the overlap.
 
 > ℹ️ Before this, the checkpoint stored the **Date header** of the last archived message and fed it
-> into the folder search — which the server answers by INTERNALDATE, a different clock that can be
-> years off on migrated mail — while messages are processed in UID order rather than date order.
+> into the folder search, which the server answers by INTERNALDATE, a different clock that can be
+> years off on migrated mail, while messages are processed in UID order rather than date order.
 > Both mismatches could move the search window past mail that had never been archived. The same path
 > is used when a sync pauses on a bandwidth limit, so that resume is fixed by this change too.
 
-### Before you rely on the timeout
+### Large mailboxes and the timeout
 
-`MailSync:TimeoutMinutes` was documented but not wired up: the cancellation token carrying it was
-created and never consulted, so a sync ran unbounded no matter what the setting said. It now does
-what the documentation always claimed.
-
-That is a behaviour change for installations with large mailboxes. A first full sync of a mailbox
-with 150,000 messages runs for hours, and a timeout shorter than that would stop it every time. It
-resumes from its checkpoint rather than starting over, but the account will not reach a completed
-state — and therefore will not advance `LastSync` — until one run gets all the way through. Review
-the value before upgrading, and set it to `0` if you would rather have no timeout at all.
+A first full sync of a mailbox with 150,000 messages runs for hours, and a timeout shorter than
+that would stop it every time. It resumes from its checkpoint rather than starting over, but the
+account will not reach a completed state, and therefore will not advance `LastSync`, until one run
+gets all the way through. Review the value for your mailboxes, and set it to `0` if you would
+rather have no timeout at all.
 
 ---
 

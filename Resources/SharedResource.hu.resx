@@ -484,7 +484,7 @@
     <value>Fiók Név</value>
   </data>
   <data name="IMAPPort" xml:space="preserve">
-    <value>IMAP Port</value>
+    <value>IMAP port</value>
   </data>
   <data name="Password" xml:space="preserve">
     <value>Jelszó</value>

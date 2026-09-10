@@ -1492,7 +1492,7 @@
     <value>Kon de EML import taak niet annuleren. De taak is mogelijk al voltooid of bestaat niet.</value>
   </data>
   <data name="EmlImportStatusTitle" xml:space="preserve">
-    <value>EML Import Status</value>
+    <value>EML-importstatus</value>
   </data>
   <data name="Import" xml:space="preserve">
     <value>Importeren</value>
@@ -1508,10 +1508,10 @@
     <value>Microsoft 365 Instellingen</value>
   </data>
   <data name="ClientId" xml:space="preserve">
-    <value>Client ID</value>
+    <value>Client-ID</value>
   </data>
   <data name="ClientSecret" xml:space="preserve">
-    <value>Client Secret</value>
+    <value>Clientgeheim</value>
   </data>
   <data name="LeaveEmptyToKeepCurrent" xml:space="preserve">
     <value>Leeg laten om huidige waarde te behouden</value>
@@ -1566,7 +1566,7 @@
     <value>Of voer dit geheim handmatig in uw authenticatie-app in:</value>
   </data>
   <data name="BackupCodes" xml:space="preserve">
-    <value>Backup Codes</value>
+    <value>Back-upcodes</value>
   </data>
   <data name="BackupCodesDescription" xml:space="preserve">
     <value>Bewaar deze backup codes op een veilige plaats. U kunt ze gebruiken om in te loggen als u toegang tot uw authenticatie-app verliest.</value>
@@ -1705,7 +1705,7 @@
     <value>Export taak gestart voor account '{0}'. U wordt doorgeleid naar de statuspagina.</value>
   </data>
   <data name="ExportStatusTitle" xml:space="preserve">
-    <value>Export Status</value>
+    <value>Exportstatus</value>
   </data>
   <data name="ExportJobInformation" xml:space="preserve">
     <value>Export Taak Informatie</value>
@@ -1853,7 +1853,7 @@
     <value>Verwerkte E-mails</value>
   </data>
   <data name="ExportStatus" xml:space="preserve">
-    <value>Export Status</value>
+    <value>Exportstatus</value>
   </data>
   <data name="Downloaded" xml:space="preserve">
     <value>Gedownload</value>
@@ -2659,7 +2659,7 @@
     <value>Geen secret, geen redirect-URI vereist. Klik na het opslaan op Autoriseren.</value>
   </data>
   <data name="MsaClientIdPlaceholder" xml:space="preserve">
-    <value>Azure App (client) ID</value>
+    <value>Azure App (client)-ID</value>
   </data>
   <data name="MsaClientSecretOptional" xml:space="preserve">
     <value>(optioneel)</value>
