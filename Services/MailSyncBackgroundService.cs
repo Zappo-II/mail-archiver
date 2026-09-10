@@ -307,8 +307,13 @@ namespace MailArchiver.Services
                             }
                             catch (OperationCanceledException)
                             {
-                                _logger.LogWarning("Sync for account {AccountName} timed out after {Timeout} minutes",
-                                    account.Name, syncTimeoutMinutes);
+                                // The sync timeout and a UI cancel are no longer delivered as
+                                // OperationCanceledException — the sync loops poll both signals
+                                // through SyncInterruption and end the job as TimedOut/Failed
+                                // themselves. If one surfaces here anyway, it did not come
+                                // from either of those mechanisms.
+                                _logger.LogWarning("Sync for account {AccountName} was cancelled unexpectedly",
+                                    account.Name);
                             }
                             catch (Exception ex)
                             {

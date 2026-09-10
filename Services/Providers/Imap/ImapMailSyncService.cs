@@ -1121,10 +1121,14 @@ namespace MailArchiver.Services.Providers.Imap
                                                 "Saving checkpoint and pausing sync. Processed: {Processed}, New: {New}",
                                                 folder.FullName, account.Name, result.ProcessedEmails, result.NewEmails);
 
+                                            // The triggering message was fetched but not archived, so
+                                            // the watermark must not advance past it. Passing no UID
+                                            // keeps the checkpoint at the last archived message,
+                                            // which is re-fetched on resume — the same invariant the
+                                            // watermarkFrozen gate below enforces.
                                             await _bandwidthService.UpdateCheckpointAsync(
                                                 account.Id, folder.FullName,
-                                                message.Date.DateTime, message.MessageId,
-                                                messageSize, uid.Id, folder.UidValidity);
+                                                null, null, messageSize);
 
                                             result.WasRateLimited = true;
                                             return result;
