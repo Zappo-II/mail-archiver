@@ -113,8 +113,9 @@ The job is queued and its progress and per-folder report appear on the job statu
 **Jobs**. The per-folder report names source folders, so it is shown only to the user who started
 the job and to administrators.
 
-The target mailbox must be an enabled IMAP account. Microsoft 365 accounts cannot be offload
-targets; the Graph restore path is unchanged.
+The target mailbox may be a disabled IMAP account, e.g. to provision a migration target before it
+goes live; the run fails loudly on connect if the target is unreachable. Microsoft 365 accounts
+cannot be offload targets; the Graph restore path is unchanged.
 
 ### Who may run it
 
@@ -142,7 +143,7 @@ docker compose exec mailarchive-app dotnet MailArchiver.dll \
 | Argument | Meaning |
 |---|---|
 | `--source-account-id` | Account to read archived mail from. Required. |
-| `--target-account-id` | Enabled IMAP account to append into. Required, and must differ from the source. |
+| `--target-account-id` | IMAP account to append into. Required, and must differ from the source. |
 | `--since` | Inclusive lower bound on the send date, `YYYY-MM-DD`. Required. |
 | `--until` | Optional inclusive upper bound. |
 | `--target-folder` | Root folder in the target mailbox. Defaults to `INBOX`. |

@@ -362,7 +362,9 @@ namespace MailArchiver.Services
             _logger.LogInformation("Job {JobId}: Target account found - Name: {AccountName}, Provider: {Provider}, Enabled: {Enabled}",
                 job.JobId, targetAccount.Name, targetAccount.Provider, targetAccount.IsEnabled);
 
-            if (!targetAccount.IsEnabled)
+            // Offload jobs are pure appends into a provisioned target and are allowed to run
+            // against a disabled account, matching the source-side and CLI path behavior.
+            if (!job.IsOffload && !targetAccount.IsEnabled)
             {
                 _logger.LogError("Job {JobId}: Target account {AccountId} is disabled", job.JobId, job.TargetAccountId);
                 throw new InvalidOperationException($"Target account '{targetAccount.Name}' is disabled");

@@ -1438,7 +1438,7 @@ namespace MailArchiver.Controllers
             if (rejection != OffloadTargetRejection.None)
             {
                 // Being handed a target one may not use is worth noticing, and worth noticing
-                // repeatedly; picking the source or a disabled account is an ordinary form slip.
+                // repeatedly; picking the source is an ordinary form slip.
                 _logger.Log(
                     rejection == OffloadTargetRejection.NotAccessible ? LogLevel.Warning : LogLevel.Information,
                     "Rejected offload target {TargetId} for source {SourceId} requested by {User}: {Reason}",

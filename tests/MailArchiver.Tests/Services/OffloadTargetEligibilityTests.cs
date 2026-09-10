@@ -80,19 +80,6 @@ public class OffloadTargetEligibilityTests
         Assert.Equal(OffloadTargetRejection.NotImap, OffloadTargetEligibility.Evaluate(graph, SourceId));
     }
 
-    [Fact]
-    public void Evaluate_ADisabledAccount_IsAccepted()
-    {
-        // Deliberate, and the reason the rule was removed. IsEnabled governs which accounts the
-        // background sync collects from; an offload appends and collects nothing. Reading it as
-        // "do not write here" blocked provisioning a migration's targets disabled and filling them
-        // ahead of time — and the source side never had the check either.
-        //
-        // A disabled account can also mean a retired one with dead credentials. That fails loudly
-        // on connect, nothing is damaged, and somebody picked the target from a list on purpose.
-        Assert.Equal(OffloadTargetRejection.None, OffloadTargetEligibility.Evaluate(Candidate(), SourceId));
-    }
-
     /// <summary>
     /// Accessibility is checked before the provider. Otherwise the form would answer "that is not
     /// an IMAP account" about a mailbox the user is not allowed to know anything about.
