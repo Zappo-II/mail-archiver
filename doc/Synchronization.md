@@ -305,6 +305,9 @@ cancels the job on the **Jobs** page, or the account's `MailSync:TimeoutMinutes`
 checked at three points — before each folder, before each batch, and before every single message —
 so neither has to wait for a large folder to finish.
 
+The timeout applies to **scheduled syncs only**. A sync started from the UI — the "Sync now" action
+or a full resync — runs without a timeout, so a long manual sync is never cut short.
+
 The two end the job differently, and the difference matters:
 
 | | Job status | `LastSync` | Checkpoints | Retention passes |
@@ -339,6 +342,10 @@ no UID recorded yet, no UIDVALIDITY recorded, or a UIDVALIDITY that no longer ma
 The last case means the server renumbered the mailbox, so the stored UID names a different message.
 Re-reading a folder costs time and is absorbed by the duplicate check; skipping one would lose mail
 silently, so every doubtful case reads in full.
+
+The Graph API provider does not write UID checkpoints — the Graph API has no equivalent of IMAP's
+UIDs. A timed-out or bandwidth-limited M365 sync "resumes" only in the sense that `LastSync` is not
+advanced, so the next run re-reads the whole window and the duplicate check absorbs the overlap.
 
 > ℹ️ Before this, the checkpoint stored the **Date header** of the last archived message and fed it
 > into the folder search — which the server answers by INTERNALDATE, a different clock that can be

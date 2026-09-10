@@ -136,6 +136,27 @@ namespace MailArchiver.Services.Providers.Graph
                         failedEmails += folderResult.FailedEmails;
                         failedFolders += folderResult.FailedFolders;
 
+                        // The folder evaluates the interrupt again inside its page/message loops, so
+                        // it can have stopped for a reason this loop top never saw — most notably a
+                        // timeout during the last folder, which must not be completed as success (it
+                        // would advance LastSync although the folder never finished).
+                        if (folderResult.StopReason == SyncStopReason.Cancelled)
+                        {
+                            _logger.LogInformation("Sync job {JobId} for account {AccountName} has been cancelled",
+                                jobId, account.Name);
+                            if (jobId != null)
+                            {
+                                _syncJobService.CompleteJob(jobId, false, "Job was cancelled");
+                            }
+                            return;
+                        }
+
+                        if (folderResult.StopReason == SyncStopReason.TimedOut)
+                        {
+                            timedOut = true;
+                            break;
+                        }
+
                         processedFolders++;
 
                         if (jobId != null)
@@ -401,6 +422,7 @@ namespace MailArchiver.Services.Providers.Graph
                     {
                         _logger.LogInformation("Graph API sync for account {AccountName} stopped after a page in folder {FolderName}: {Reason}",
                             account.Name, folder.DisplayName, pageStopReason);
+                        result.StopReason = pageStopReason;
                         return result;
                     }
 
@@ -660,6 +682,7 @@ namespace MailArchiver.Services.Providers.Graph
                 {
                     _logger.LogInformation("Graph API sync for account {AccountName} stopped during message processing in folder {FolderName}: {Reason}",
                         account.Name, folder.DisplayName, messageStopReason);
+                    result.StopReason = messageStopReason;
                     return;
                 }
 
@@ -1032,6 +1055,14 @@ namespace MailArchiver.Services.Providers.Graph
             /// number of failed messages.
             /// </summary>
             public int FailedFolders { get; set; }
+
+            /// <summary>
+            /// Why this folder's sync stopped before it was finished, or <see cref="SyncStopReason.None"/>
+            /// when it ran to the end. Same meaning as on the IMAP side: a token that fires inside the
+            /// last folder must reach the folder loop, or the sync would be completed as if nothing
+            /// had happened.
+            /// </summary>
+            public SyncStopReason StopReason { get; set; } = SyncStopReason.None;
         }
     }
 }

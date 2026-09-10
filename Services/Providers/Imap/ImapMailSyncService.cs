@@ -186,6 +186,27 @@ namespace MailArchiver.Services.Providers.Imap
                         recoveredEmails += folderResult.RecoveredEmails;
                         providerPlaceholderEmails += folderResult.ProviderPlaceholderEmails;
 
+                        // The folder evaluates the interrupt again inside its batch/message loops,
+                        // so it can have stopped for a reason this loop top never saw — most notably
+                        // a timeout during the last folder, which must not be completed as success
+                        // (it would advance LastSync and drop the checkpoints the resume needs).
+                        if (folderResult.StopReason == SyncStopReason.Cancelled)
+                        {
+                            _logger.LogInformation("Sync job {JobId} for account {AccountName} has been cancelled",
+                                jobId, account.Name);
+                            if (jobId != null)
+                            {
+                                _syncJobService.CompleteJob(jobId, false, "Job was cancelled");
+                            }
+                            return;
+                        }
+
+                        if (folderResult.StopReason == SyncStopReason.TimedOut)
+                        {
+                            timedOut = true;
+                            break;
+                        }
+
                         if (folderResult.WasRateLimited)
                         {
                             wasRateLimited = true;
@@ -803,6 +824,7 @@ namespace MailArchiver.Services.Providers.Imap
                         {
                             _logger.LogInformation("Sync for account {AccountName} stopped before a batch in folder {FolderName}: {Reason}",
                                 account.Name, folder.FullName, batchStopReason);
+                            result.StopReason = batchStopReason;
                             return result;
                         }
 
@@ -819,6 +841,7 @@ namespace MailArchiver.Services.Providers.Imap
                             {
                                 _logger.LogInformation("Sync for account {AccountName} stopped during message processing in folder {FolderName}: {Reason}",
                                     account.Name, folder.FullName, messageStopReason);
+                                result.StopReason = messageStopReason;
                                 return result;
                             }
 
@@ -1141,9 +1164,6 @@ namespace MailArchiver.Services.Providers.Imap
                                 //
                                 // Not written once anything in this folder has failed: the watermark
                                 // has to keep meaning "everything at or below this is archived".
-                                //
-                                // Skipped once anything in this folder has failed, so the watermark
-                                // keeps meaning "everything at or below this is archived".
                                 if (!watermarkFrozen)
                                 {
                                     try
@@ -1584,6 +1604,14 @@ namespace MailArchiver.Services.Providers.Imap
 
             public long BytesDownloaded { get; set; }
             public bool WasRateLimited { get; set; }
+
+            /// <summary>
+            /// Why this folder's sync stopped before it was finished, or <see cref="SyncStopReason.None"/>
+            /// when it ran to the end. The folder loop re-evaluates the interrupt at its top, but only
+            /// there — so a token that fires inside the last folder would otherwise be swallowed and the
+            /// sync completed as if nothing had happened.
+            /// </summary>
+            public SyncStopReason StopReason { get; set; } = SyncStopReason.None;
         }
     }
 }
