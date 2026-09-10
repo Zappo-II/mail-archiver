@@ -146,6 +146,21 @@ namespace MailArchiver.Services
             }
         }
 
+        public void CompleteJobTimedOut(string jobId, string? errorMessage = null)
+        {
+            if (_jobs.TryGetValue(jobId, out var job))
+            {
+                job.Status = SyncJobStatus.TimedOut;
+                job.Completed = DateTime.UtcNow;
+                job.ErrorMessage = errorMessage;
+
+                // Remove from active account jobs
+                _activeAccountJobs.TryRemove(job.MailAccountId, out _);
+
+                _logger.LogWarning("Sync job {JobId} stopped at the sync timeout. Checkpoints kept for resume.", jobId);
+            }
+        }
+
         public bool CancelJob(string jobId)
         {
             if (_jobs.TryGetValue(jobId, out var job))

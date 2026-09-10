@@ -2512,6 +2512,9 @@
   <data name="RateLimited" xml:space="preserve">
     <value>Limite di velocità raggiunto</value>
   </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Tempo scaduto</value>
+  </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>Il progresso è misurato in base alle cartelle completate. Una cartella grande (es. INBOX) mantiene la barra a 0% fino al termine.</value>
   </data>

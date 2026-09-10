@@ -212,7 +212,12 @@ namespace MailArchiver.Services
                                     }
                                 }
 
-                                using var accountCts = new CancellationTokenSource(TimeSpan.FromMinutes(syncTimeoutMinutes));
+                                // A non-positive timeout means "no timeout": the source is still
+                                // created so a manual cancel from the UI has something to fire, it
+                                // just never trips on its own.
+                                using var accountCts = syncTimeoutMinutes > 0
+                                    ? new CancellationTokenSource(TimeSpan.FromMinutes(syncTimeoutMinutes))
+                                    : new CancellationTokenSource();
 
                                 // If an automatic full sync is due, reset the watermark so the
                                 // provider's sync code treats this as a full sync. This mirrors the
@@ -253,13 +258,13 @@ namespace MailArchiver.Services
                                 if (account.Provider == ProviderType.M365)
                                 {
                                     _logger.LogInformation("Using Microsoft Graph API for M365 account: {AccountName}", account.Name);
-                                    await graphEmailService.SyncMailAccountAsync(account, jobId);
+                                    await graphEmailService.SyncMailAccountAsync(account, jobId, accountCts.Token);
                                 }
                                 else
                                 {
                                     _logger.LogInformation("Using IMAP for account: {AccountName}", account.Name);
                                     var provider = await providerFactory.GetServiceForAccountAsync(account.Id);
-                                    await provider.SyncMailAccountAsync(account, jobId);
+                                    await provider.SyncMailAccountAsync(account, jobId, accountCts.Token);
                                 }
 
                                 // NOTE: Checkpoint clearing is handled by SyncMailAccountAsync itself.
@@ -302,8 +307,13 @@ namespace MailArchiver.Services
                             }
                             catch (OperationCanceledException)
                             {
-                                _logger.LogWarning("Sync for account {AccountName} timed out after {Timeout} minutes",
-                                    account.Name, syncTimeoutMinutes);
+                                // The sync timeout and a UI cancel are no longer delivered as
+                                // OperationCanceledException — the sync loops poll both signals
+                                // through SyncInterruption and end the job as TimedOut/Failed
+                                // themselves. If one surfaces here anyway, it did not come
+                                // from either of those mechanisms.
+                                _logger.LogWarning("Sync for account {AccountName} was cancelled unexpectedly",
+                                    account.Name);
                             }
                             catch (Exception ex)
                             {

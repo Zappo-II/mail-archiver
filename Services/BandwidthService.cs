@@ -292,12 +292,17 @@ namespace MailArchiver.Services
         }
 
         /// <inheritdoc />
-        public async Task UpdateCheckpointAsync(int accountId, string folderName, DateTime? lastMessageDate, string? lastMessageId, long bytesDownloaded = 0)
+        public async Task UpdateCheckpointAsync(int accountId, string folderName, DateTime? lastMessageDate, string? lastMessageId, long bytesDownloaded = 0, long? lastUid = null, long? uidValidity = null)
         {
             var checkpoint = await GetOrCreateCheckpointAsync(accountId, folderName);
 
             checkpoint.LastMessageDate = lastMessageDate;
             checkpoint.LastMessageId = lastMessageId;
+            if (lastUid.HasValue)
+            {
+                checkpoint.LastUid = lastUid;
+                checkpoint.UidValidity = uidValidity;
+            }
             checkpoint.ProcessedCount++;
             checkpoint.BytesDownloaded += bytesDownloaded;
             checkpoint.UpdatedAt = DateTime.UtcNow;

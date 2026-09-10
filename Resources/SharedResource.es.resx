@@ -2511,6 +2511,9 @@
   <data name="RateLimited" xml:space="preserve">
     <value>Límite de tasa alcanzado</value>
   </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Tiempo de espera agotado</value>
+  </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>El progreso se mide por carpetas completadas. Una carpeta grande (p.&#160;ej. INBOX) mantiene la barra en 0% hasta que termina.</value>
   </data>

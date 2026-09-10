@@ -73,7 +73,17 @@ namespace MailArchiver.Services
         /// <param name="lastMessageDate">Date of the last processed message.</param>
         /// <param name="lastMessageId">Message-ID of the last processed message.</param>
         /// <param name="bytesDownloaded">Bytes downloaded for this message.</param>
-        Task UpdateCheckpointAsync(int accountId, string folderName, DateTime? lastMessageDate, string? lastMessageId, long bytesDownloaded = 0);
+        /// <param name="lastUid">
+        /// IMAP UID of the last processed message. This is the resume watermark — the date and
+        /// Message-ID above are diagnostics only, because they cannot be compared against what the
+        /// folder search actually asks the server for.
+        /// </param>
+        /// <param name="uidValidity">
+        /// The folder's UIDVALIDITY when <paramref name="lastUid"/> was recorded. A checkpoint whose
+        /// value no longer matches the folder is discarded: the server has renumbered and the stored
+        /// UID now points at a different message.
+        /// </param>
+        Task UpdateCheckpointAsync(int accountId, string folderName, DateTime? lastMessageDate, string? lastMessageId, long bytesDownloaded = 0, long? lastUid = null, long? uidValidity = null);
 
         /// <summary>
         /// Marks a folder checkpoint as completed.

@@ -484,7 +484,7 @@
     <value>Fiók Név</value>
   </data>
   <data name="IMAPPort" xml:space="preserve">
-    <value>IMAP Port</value>
+    <value>IMAP port</value>
   </data>
   <data name="Password" xml:space="preserve">
     <value>Jelszó</value>
@@ -2503,6 +2503,9 @@
   </data>
   <data name="RateLimited" xml:space="preserve">
     <value>Sávszélső határ</value>
+  </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Időtúllépés</value>
   </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>A haladás a befejezett mappák alapján mérve. Egy nagy mappa (pl. INBOX) 0%-on tartja a sávot, amíg be nem fejeződik.</value>

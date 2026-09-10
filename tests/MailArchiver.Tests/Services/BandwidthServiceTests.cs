@@ -340,6 +340,49 @@ public class BandwidthServiceTests
     }
 
     [Fact]
+    public async Task UpdateCheckpointAsync_RecordsTheUidWatermark()
+    {
+        await using var scope = await _fixture.CreateTransactionalContextAsync();
+        var ctx = scope.Context;
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            var svc = ServiceFactory.CreateBandwidthService(ctx);
+            await svc.UpdateCheckpointAsync(acct.Id, "INBOX", DateTime.UtcNow, "msg1", 100, 41, 4711);
+            await svc.UpdateCheckpointAsync(acct.Id, "INBOX", DateTime.UtcNow, "msg2", 200, 42, 4711);
+
+            var cp = await ctx.SyncCheckpoints.AsNoTracking()
+                .FirstAsync(c => c.MailAccountId == acct.Id && c.FolderName == "INBOX");
+            Assert.Equal(42, cp.LastUid);
+            Assert.Equal(4711, cp.UidValidity);
+        }
+        finally { await scope.RollbackAsync(); }
+    }
+
+    [Fact]
+    public async Task UpdateCheckpointAsync_WithoutAUid_KeepsTheOneItHas()
+    {
+        // The bandwidth-limit path and the ordinary progress path both write checkpoints, and a
+        // caller that has no UID to offer must not wipe a watermark somebody else recorded — that
+        // would silently turn a resumable folder back into a full read.
+        await using var scope = await _fixture.CreateTransactionalContextAsync();
+        var ctx = scope.Context;
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            var svc = ServiceFactory.CreateBandwidthService(ctx);
+            await svc.UpdateCheckpointAsync(acct.Id, "INBOX", DateTime.UtcNow, "msg1", 100, 42, 4711);
+            await svc.UpdateCheckpointAsync(acct.Id, "INBOX", DateTime.UtcNow, "msg2", 200);
+
+            var cp = await ctx.SyncCheckpoints.AsNoTracking()
+                .FirstAsync(c => c.MailAccountId == acct.Id && c.FolderName == "INBOX");
+            Assert.Equal(42, cp.LastUid);
+            Assert.Equal(4711, cp.UidValidity);
+        }
+        finally { await scope.RollbackAsync(); }
+    }
+
+    [Fact]
     public async Task MarkFolderCompletedAsync_SetsCompleted()
     {
         await using var scope = await _fixture.CreateTransactionalContextAsync();

@@ -2162,178 +2162,178 @@
       <value>Lokalno hranjenje je mogoče nastaviti le, če je nastavljeno tudi hranjenje na strežniku ('Izbriši po dneh').</value>
   </data>
   <data name="AffectedAccounts" xml:space="preserve">
-    <value>Affected Accounts</value>
+    <value>Prizadeti računi</value>
   </data>
   <data name="ApplicationStarted" xml:space="preserve">
-    <value>Application Started</value>
+    <value>Aplikacija zagnana</value>
   </data>
   <data name="ApplyToAllAccounts" xml:space="preserve">
-    <value>Apply to all accounts in this domain</value>
+    <value>Uporabi za vse račune v tej domeni</value>
   </data>
   <data name="ApplyToAllDomainAccountsPrompt" xml:space="preserve">
-    <value>You have modified the Microsoft 365 credentials. Would you like to apply these changes to all other accounts from the same domain?</value>
+    <value>Spremenili ste poverilnice Microsoft 365. Ali želite te spremembe uporabiti za vse druge račune iz iste domene?</value>
   </data>
   <data name="BackToLogin" xml:space="preserve">
-    <value>Back to Login</value>
+    <value>Nazaj na prijavo</value>
   </data>
   <data name="CannotLeavePasswordChange" xml:space="preserve">
-    <value>You must change your password before you can continue using the system.</value>
+    <value>Pred nadaljnjo uporabo sistema morate spremeniti svoje geslo.</value>
   </data>
   <data name="ComplianceInformation" xml:space="preserve">
-    <value>Compliance Information</value>
+    <value>Informacije o skladnosti</value>
   </data>
   <data name="ComplianceModeActive" xml:space="preserve">
-    <value>Compliance Mode ACTIVE</value>
+    <value>Način skladnosti AKTIVEN</value>
   </data>
   <data name="ComplianceModeDisabled" xml:space="preserve">
-    <value>Compliance Mode DISABLED</value>
+    <value>Način skladnosti ONEMOGOČEN</value>
   </data>
   <data name="ComplianceModeStarted" xml:space="preserve">
-    <value>Compliance Mode Started</value>
+    <value>Način skladnosti zagnan</value>
   </data>
   <data name="ComplianceStatus" xml:space="preserve">
-    <value>Compliance Status</value>
+    <value>Status skladnosti</value>
   </data>
   <data name="ConfirmResetTwoFactor" xml:space="preserve">
-    <value>Are you sure you want to reset two-factor authentication for this user? They will need to set it up again.</value>
+    <value>Ali ste prepričani, da želite ponastaviti dvorfaktorsko avtentikacijo za tega uporabnika? Moral jo bo znova nastaviti.</value>
   </data>
   <data name="ContentHash" xml:space="preserve">
-    <value>Content Hash (SHA-256)</value>
+    <value>Zgoščena vrednost vsebine (SHA-256)</value>
   </data>
   <data name="CopyCredentials" xml:space="preserve">
-    <value>Copy Credentials</value>
+    <value>Kopiraj poverilnice</value>
   </data>
   <data name="CouldNotLoadFolders" xml:space="preserve">
-    <value>Could not load folders from server</value>
+    <value>Map ni bilo mogoče naložiti s strežnika</value>
   </data>
   <data name="CredentialChangeDetected" xml:space="preserve">
-    <value>Credential Change Detected</value>
+    <value>Zaznana sprememba poverilnic</value>
   </data>
   <data name="CredentialsCopied" xml:space="preserve">
-    <value>Credentials successfully copied!</value>
+    <value>Poverilnice so bile uspešno kopirane!</value>
   </data>
   <data name="CurrentHash" xml:space="preserve">
-    <value>Current Hash</value>
+    <value>Trenutna zgoščena vrednost</value>
   </data>
   <data name="EmailDeletionAllowed" xml:space="preserve">
-    <value>Email deletion ALLOWED</value>
+    <value>Brisanje e-pošte DOVOLJENO</value>
   </data>
   <data name="EmailDeletionPrevented" xml:space="preserve">
-    <value>Email deletion PREVENTED</value>
+    <value>Brisanje e-pošte PREPREČENO</value>
   </data>
   <data name="EmailLocked" xml:space="preserve">
     <value>Locked</value>
   </data>
   <data name="EmailLockedDescription" xml:space="preserve">
-    <value>This email is locked and its content integrity is protected by a cryptographic hash</value>
+    <value>Ta e-pošta je zaklenjena in njena vsebina je zaščitena s kriptografsko zgoščeno vrednostjo</value>
   </data>
   <data name="ErrorCopyingCredentials" xml:space="preserve">
-    <value>Error copying credentials</value>
+    <value>Napaka pri kopiranju poverilnic</value>
   </data>
   <data name="ErrorSavingChanges" xml:space="preserve">
-    <value>Error saving changes</value>
+    <value>Napaka pri shranjevanju sprememb</value>
   </data>
   <data name="ExistingM365AccountsFound" xml:space="preserve">
-    <value>Existing M365 Accounts Found</value>
+    <value>Najdeni obstoječi računi M365</value>
   </data>
   <data name="HasAttachments" xml:space="preserve">
-    <value>Has attachments</value>
+    <value>Ima priloge</value>
   </data>
   <data name="HashCreated" xml:space="preserve">
-    <value>Hash Created</value>
+    <value>Zgoščena vrednost ustvarjena</value>
   </data>
   <data name="IntegrityCheck" xml:space="preserve">
-    <value>Integrity Check</value>
+    <value>Preverjanje integritete</value>
   </data>
   <data name="IntegrityValid" xml:space="preserve">
-    <value>Integrity Valid</value>
+    <value>Integriteta veljavna</value>
   </data>
   <data name="IntegrityValidDescription" xml:space="preserve">
-    <value>The email content has not been modified. The current hash matches the stored hash.</value>
+    <value>Vsebina e-pošte ni bila spremenjena. Trenutna zgoščena vrednost se ujema s shranjeno.</value>
   </data>
   <data name="IntegrityViolation" xml:space="preserve">
-    <value>Integrity Violation</value>
+    <value>Kršitev integritete</value>
   </data>
   <data name="IntegrityViolationDescription" xml:space="preserve">
-    <value>WARNING: The current hash does not match the stored hash. The email content may have been tampered with.</value>
+    <value>OPOZORILO: Trenutna zgoščena vrednost se ne ujema s shranjeno. Vsebina e-pošte je lahko bila spremenjena.</value>
   </data>
   <data name="LoadAvailableFolders" xml:space="preserve">
-    <value>Load Available Folders</value>
+    <value>Naloži razpoložljive mape</value>
   </data>
   <data name="LockedEmail" xml:space="preserve">
-    <value>Locked email - content protected for compliance</value>
+    <value>Zaklenjena e-pošta - vsebina zaščitena zaradi skladnosti</value>
   </data>
   <data name="LoginBlocked" xml:space="preserve">
-    <value>Login Temporarily Blocked</value>
+    <value>Prijava začasno blokirana</value>
   </data>
   <data name="LoginBlockedInfo" xml:space="preserve">
-    <value>For security reasons, login attempts from your IP address have been temporarily blocked due to multiple failed authentication attempts. Please wait 10 minutes before trying again.</value>
+    <value>Zaradi varnostnih razlogov so prijave z vašega IP naslova začasno blokirane zaradi več neuspelih poskusov avtentikacije. Počakajte 10 minut, preden poskusite znova.</value>
   </data>
   <data name="LoginBlockedMessage" xml:space="preserve">
-    <value>Too many failed login attempts detected</value>
+    <value>Zaznanih preveč neuspelih poskusov prijave</value>
   </data>
   <data name="LoginBlockedTitle" xml:space="preserve">
-    <value>Access Blocked</value>
+    <value>Dostop blokiran</value>
   </data>
   <data name="Mismatch" xml:space="preserve">
     <value>Mismatch</value>
   </data>
   <data name="NoFoldersFound" xml:space="preserve">
-    <value>No folders found on server</value>
+    <value>Na strežniku ni bilo najdenih map</value>
   </data>
   <data name="PasswordChangeRequired" xml:space="preserve">
-    <value>Password Change Required</value>
+    <value>Zahtevana sprememba gesla</value>
   </data>
   <data name="PasswordChangeRequiredInfo" xml:space="preserve">
-    <value>Your new password must be different from the current password and meet all security requirements.</value>
+    <value>Novo geslo mora biti različno od trenutnega gesla in izpolnjevati vse varnostne zahteve.</value>
   </data>
   <data name="PasswordChangeRequiredMessage" xml:space="preserve">
-    <value>For security reasons, you must change your password before continuing. This is required because you are using the default system credentials on a newly set up system.</value>
+    <value>Zaradi varnostnih razlogov morate pred nadaljevanjem spremeniti geslo. To je zahtevano, ker na novo postavljenem sistemu uporabljate privzeta sistemska poverilnice.</value>
   </data>
   <data name="PasswordMinLength" xml:space="preserve">
-    <value>Password must be at least 10 characters long</value>
+    <value>Geslo mora vsebovati vsaj 10 znakov</value>
   </data>
   <data name="PasswordMustBeDifferent" xml:space="preserve">
-    <value>New password must be different from the current password</value>
+    <value>Novo geslo mora biti različno od trenutnega gesla</value>
   </data>
   <data name="PasswordRequirements" xml:space="preserve">
-    <value>Password Requirements</value>
+    <value>Zahteve za geslo</value>
   </data>
   <data name="PasswordRequiresLowercase" xml:space="preserve">
-    <value>Password must contain at least one lowercase letter</value>
+    <value>Geslo mora vsebovati vsaj eno malo črko</value>
   </data>
   <data name="PasswordRequiresNumber" xml:space="preserve">
-    <value>Password must contain at least one number</value>
+    <value>Geslo mora vsebovati vsaj eno številko</value>
   </data>
   <data name="PasswordRequiresSpecialChar" xml:space="preserve">
-    <value>Password must contain at least one special character</value>
+    <value>Geslo mora vsebovati vsaj en poseben znak</value>
   </data>
   <data name="PasswordRequiresUppercase" xml:space="preserve">
-    <value>Password must contain at least one uppercase letter</value>
+    <value>Geslo mora vsebovati vsaj eno veliko črko</value>
   </data>
   <data name="PleaseSelectAccount" xml:space="preserve">
-    <value>Please select an account first</value>
+    <value>Najprej izberite račun</value>
   </data>
   <data name="Provider" xml:space="preserve">
     <value>Provider</value>
   </data>
   <data name="ResetTwoFactor" xml:space="preserve">
-    <value>Reset Two-Factor Authentication</value>
+    <value>Ponastavi dvorfaktorsko avtentikacijo</value>
   </data>
   <data name="SelectAccount" xml:space="preserve">
-    <value>-- Select Account --</value>
+    <value>-- Izberi račun --</value>
   </data>
   <data name="StoredHash" xml:space="preserve">
-    <value>Stored Hash</value>
+    <value>Shranjena zgoščena vrednost</value>
   </data>
   <data name="TenantId" xml:space="preserve">
     <value>Tenant-ID</value>
   </data>
   <data name="TwoFactorEnabled" xml:space="preserve">
-    <value>Two-factor authentication is currently enabled for this user.</value>
+    <value>Dvorfaktorska avtentikacija je za tega uporabnika trenutno omogočena.</value>
   </data>
   <data name="UseExistingCredentialsPrompt" xml:space="preserve">
-    <value>Other Microsoft 365 accounts from this domain already exist. You can copy their credentials to save time.</value>
+    <value>Drugi računi Microsoft 365 iz te domene že obstajajo. Lahko kopirate njihove poverilnice in prihranite čas.</value>
   </data>
   <data name="OidcAccountAlreadyExists" xml:space="preserve">
     <value>Račun z tem e-poštnim naslovom že obstaja. Obrnite se na svojega administratorja, da odstranite ali spremenite obstoječi lokalni račun, preden uporabite OIDC avtentikacijo.</value>
@@ -2511,6 +2511,9 @@
   </data>
   <data name="RateLimited" xml:space="preserve">
     <value>Doseženo omejitve hitrosti</value>
+  </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Časovna omejitev presežena</value>
   </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>Napredek se meri po končanih mapah. Velika mapa (npr. INBOX) drži vrstico na 0%, dokler se ne konča.</value>

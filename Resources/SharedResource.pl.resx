@@ -1930,7 +1930,7 @@
     <value>Wychodzące wiadomości e-mail</value>
   </data>
   <data name="AccountExportJobs" xml:space="preserve">
-    <value>Account Export Jobs</value>
+    <value>Zadania eksportu kont</value>
   </data>
   <data name="FileCreated" xml:space="preserve">
     <value>Plik utworzony</value>
@@ -2557,6 +2557,9 @@
   </data>
   <data name="RateLimited" xml:space="preserve">
     <value>Limit prędkości osiągnięty</value>
+  </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>Przekroczono limit czasu</value>
   </data>
   <data name="SyncProgressTooltip" xml:space="preserve">
     <value>Postęp jest mierzony według ukończonych folderów. Duży folder (np. INBOX) utrzymuje pasek na 0%, dopóki się nie zakończy.</value>
