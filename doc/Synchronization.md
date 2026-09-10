@@ -104,7 +104,7 @@ The sync behavior is controlled by the `MailSync` section of `appsettings.json` 
 |---------|---------|-------------|
 | `MailSync:IntervalMinutes` | `15` | Global default for the per-account sync interval, in minutes. Each account can override this on the Create/Edit page (leave empty to use this default). |
 | `MailSync:FullSyncIntervalHours` | _unset_ | Optional global default for automatic full resyncs, in hours. When unset (the default), no automatic full sync runs unless a per-account `FullSyncIntervalHours` value is set. Per-account values override this. |
-| `MailSync:TimeoutMinutes` | `120` | Per-account sync timeout. A sync that runs longer stops at the next message boundary and resumes on the next run. `0` (or any non-positive value) means no timeout. See [Stopping a Sync Early](#-stopping-a-sync-early). |
+| `MailSync:TimeoutMinutes` | `0` (none) | Per-account sync timeout. A sync that runs longer stops at the next message boundary and resumes on the next run. `0` (the default, or any non-positive value) means no timeout. See [Stopping a Sync Early](#-stopping-a-sync-early). |
 | `MailSync:ConnectionTimeoutSeconds` | `300` | IMAP connection timeout. |
 | `MailSync:CommandTimeoutSeconds` | `600` | IMAP command timeout. |
 | `MailSync:AlwaysForceFullSync` | `false` | When `true`, every cycle is a Full Sync for all accounts. **Diagnostics only – keep off in production.** |

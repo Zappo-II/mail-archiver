@@ -40,7 +40,8 @@ namespace MailArchiver.Services
             // purpose: null (the default) means "no automatic full sync" for accounts
             // that do not set their own FullSyncIntervalHours. Per-account value wins.
             var defaultFullSyncIntervalHours = _configuration.GetValue<int?>("MailSync:FullSyncIntervalHours");
-            var syncTimeoutMinutes = _configuration.GetValue<int>("MailSync:TimeoutMinutes", 60);
+            // 0 or negative = no timeout; the fallback matches MailSyncOptions.
+            var syncTimeoutMinutes = _configuration.GetValue<int>("MailSync:TimeoutMinutes", 0);
             var alwaysForceFullSync = _configuration.GetValue<bool>("MailSync:AlwaysForceFullSync", false);
             // Maximum number of account syncs that may run in parallel within one poll
             // cycle. A value of 1 reproduces the previous sequential behaviour.

@@ -6,7 +6,8 @@ namespace MailArchiver.Models
         
         public int IntervalMinutes { get; set; } = 5;
         public int? FullSyncIntervalHours { get; set; }
-        public int TimeoutMinutes { get; set; } = 60;
+        // 0 = no timeout: a sync runs until it finishes or is cancelled from the UI.
+        public int TimeoutMinutes { get; set; } = 0;
         public int ConnectionTimeoutSeconds { get; set; } = 180;
         public int CommandTimeoutSeconds { get; set; } = 300;
         public bool AlwaysForceFullSync { get; set; } = false;
