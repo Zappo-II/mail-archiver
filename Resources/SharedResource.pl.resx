@@ -3322,10 +3322,10 @@
     <value>Rozpocznij przenoszenie</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>Brak innego włączonego konta IMAP jako celu. Najpierw utwórz takie konto.</value>
+    <value>Brak innego konta IMAP jako celu. Najpierw utwórz takie konto.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Żadna ze skrzynek Ci przypisanych nie może być celem. Poproś administratora o przypisanie innego włączonego konta IMAP.</value>
+    <value>Żadna ze skrzynek Ci przypisanych nie może być celem. Poproś administratora o przypisanie innego konta IMAP.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Wybierz skrzynkę docelową.</value>
@@ -3338,9 +3338,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Skrzynka docelowa musi być kontem IMAP.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Wybrana skrzynka docelowa jest wyłączona.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Podaj okno miesięcy lub datę od.</value>

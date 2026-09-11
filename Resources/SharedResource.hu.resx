@@ -3268,10 +3268,10 @@
     <value>Átvitel indítása</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>Nincs másik engedélyezett IMAP-fiók célként. Hozzon létre először egyet.</value>
+    <value>Nincs másik IMAP-fiók célként. Hozzon létre először egyet.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Az Önhöz rendelt postafiókok egyike sem használható célként. Kérjen egy másik engedélyezett IMAP-fiók hozzárendelését az adminisztrátortól.</value>
+    <value>Az Önhöz rendelt postafiókok egyike sem használható célként. Kérjen egy másik IMAP-fiók hozzárendelését az adminisztrátortól.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Válasszon célpostafiókot.</value>
@@ -3284,9 +3284,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>A célpostafióknak IMAP-fióknak kell lennie.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>A kiválasztott célpostafiók le van tiltva.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Adjon meg hónap-ablakot vagy dátumtól értéket.</value>

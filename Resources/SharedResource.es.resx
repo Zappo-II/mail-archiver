@@ -3275,10 +3275,10 @@
     <value>Iniciar volcado</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>No hay otra cuenta IMAP habilitada disponible como destino. Cree una primero.</value>
+    <value>No hay otra cuenta IMAP disponible como destino. Cree una primero.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Ninguno de los buzones asignados a usted puede usarse como destino. Pida a un administrador que le asigne otra cuenta IMAP habilitada.</value>
+    <value>Ninguno de los buzones asignados a usted puede usarse como destino. Pida a un administrador que le asigne otra cuenta IMAP.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Elija un buzón de destino.</value>
@@ -3291,9 +3291,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>El buzón de destino debe ser una cuenta IMAP.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>El buzón de destino seleccionado está deshabilitado.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Indique una ventana de meses o una fecha de inicio.</value>

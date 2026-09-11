@@ -3276,10 +3276,10 @@
     <value>Overbrengen starten</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>Geen ander ingeschakeld IMAP-account beschikbaar als doel. Maak er eerst een aan.</value>
+    <value>Geen ander IMAP-account beschikbaar als doel. Maak er eerst een aan.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Geen van de aan u toegewezen postvakken kan als doel worden gebruikt. Vraag een beheerder om een ander ingeschakeld IMAP-account toe te wijzen.</value>
+    <value>Geen van de aan u toegewezen postvakken kan als doel worden gebruikt. Vraag een beheerder om een ander IMAP-account toe te wijzen.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Kies een doelpostvak.</value>
@@ -3292,9 +3292,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Het doelpostvak moet een IMAP-account zijn.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Het geselecteerde doelpostvak is uitgeschakeld.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Geef een maandvenster of een vanaf-datum op.</value>

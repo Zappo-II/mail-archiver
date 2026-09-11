@@ -669,10 +669,10 @@
     <value>Start offload</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>No other enabled IMAP account is available as a target. Create one first.</value>
+    <value>No other IMAP account is available as a target. Create one first.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>None of the mailboxes assigned to you can be used as a target. Ask an administrator to assign you another enabled IMAP account.</value>
+    <value>None of the mailboxes assigned to you can be used as a target. Ask an administrator to assign you another IMAP account.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Please choose a target mailbox.</value>
@@ -685,9 +685,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>The target mailbox must be an IMAP account.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>The selected target mailbox is disabled.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Please provide either a month window or a from date.</value>

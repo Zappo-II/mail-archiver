@@ -1431,7 +1431,6 @@ namespace MailArchiver.Controllers
                     Id = target.Id,
                     // The Graph restore path is untouched by this feature.
                     Provider = target.Provider,
-                    IsEnabled = target.IsEnabled,
                     IsAccessible = OffloadTargetEligibility.IsAccessible(target.Id, allowedAccountIds),
                 },
                 id);
@@ -1439,7 +1438,7 @@ namespace MailArchiver.Controllers
             if (rejection != OffloadTargetRejection.None)
             {
                 // Being handed a target one may not use is worth noticing, and worth noticing
-                // repeatedly; picking the source or a disabled account is an ordinary form slip.
+                // repeatedly; picking the source is an ordinary form slip.
                 _logger.Log(
                     rejection == OffloadTargetRejection.NotAccessible ? LogLevel.Warning : LogLevel.Information,
                     "Rejected offload target {TargetId} for source {SourceId} requested by {User}: {Reason}",
@@ -1554,7 +1553,7 @@ namespace MailArchiver.Controllers
 
             var candidates = await candidateQuery
                 .OrderBy(a => a.Name)
-                .Select(a => new { a.Id, a.Name, a.EmailAddress, a.Provider, a.IsEnabled })
+                .Select(a => new { a.Id, a.Name, a.EmailAddress, a.Provider })
                 .ToListAsync();
 
             var targets = candidates
@@ -1563,7 +1562,6 @@ namespace MailArchiver.Controllers
                     {
                         Id = a.Id,
                         Provider = a.Provider,
-                        IsEnabled = a.IsEnabled,
                         IsAccessible = OffloadTargetEligibility.IsAccessible(a.Id, allowedAccountIds),
                     },
                     account.Id))

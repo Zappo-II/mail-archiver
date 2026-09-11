@@ -816,12 +816,9 @@ if (cliArgs.Any(a => a == "--offload"))
                               "offload targets must be IMAP");
             Environment.Exit(ExitBadArgs);
         }
-        // Same rule the queued job path and the UI apply, so all three agree.
-        if (!targetAccount.IsEnabled)
-        {
-            Console.WriteLine($"ERROR: target account '{targetAccount.Name}' is disabled");
-            Environment.Exit(ExitBadArgs);
-        }
+        // A disabled target is accepted here as it is in the UI and the queued job path: IsEnabled
+        // decides what the background sync collects from, and an offload appends rather than
+        // collects. See OffloadTargetEligibility.Evaluate.
 
         var offloadOptions = offloadServices.GetRequiredService<IOptions<OffloadOptions>>().Value;
         var batchRestoreOptions = offloadServices.GetRequiredService<IOptions<BatchRestoreOptions>>().Value;

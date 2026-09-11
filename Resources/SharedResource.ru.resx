@@ -3276,10 +3276,10 @@
     <value>Начать выгрузку</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>Нет другого включённого аккаунта IMAP в качестве цели. Сначала создайте его.</value>
+    <value>Нет другого аккаунта IMAP в качестве цели. Сначала создайте его.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Ни один из назначенных вам ящиков нельзя использовать в качестве цели. Попросите администратора назначить вам ещё один включённый аккаунт IMAP.</value>
+    <value>Ни один из назначенных вам ящиков нельзя использовать в качестве цели. Попросите администратора назначить вам ещё один аккаунт IMAP.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Выберите целевой почтовый ящик.</value>
@@ -3292,9 +3292,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Целевой почтовый ящик должен быть аккаунтом IMAP.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Выбранный целевой почтовый ящик отключён.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Укажите окно месяцев или дату начала.</value>

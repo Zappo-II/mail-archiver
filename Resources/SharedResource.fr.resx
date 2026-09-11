@@ -3276,10 +3276,10 @@
     <value>Lancer la décharge</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>Aucun autre compte IMAP activé n'est disponible comme destination. Créez-en un d'abord.</value>
+    <value>Aucun autre compte IMAP n'est disponible comme destination. Créez-en un d'abord.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Aucune des boîtes aux lettres qui vous sont attribuées ne peut servir de destination. Demandez à un administrateur de vous attribuer un autre compte IMAP activé.</value>
+    <value>Aucune des boîtes aux lettres qui vous sont attribuées ne peut servir de destination. Demandez à un administrateur de vous attribuer un autre compte IMAP.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Veuillez choisir une boîte aux lettres de destination.</value>
@@ -3292,9 +3292,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>La boîte aux lettres de destination doit être un compte IMAP.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>La boîte aux lettres de destination sélectionnée est désactivée.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Veuillez fournir soit une fenêtre de mois, soit une date de début.</value>

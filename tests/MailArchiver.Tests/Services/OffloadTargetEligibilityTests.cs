@@ -16,9 +16,8 @@ public class OffloadTargetEligibilityTests
     private static OffloadTargetCandidate Candidate(
         int id = 2,
         ProviderType provider = ProviderType.IMAP,
-        bool isEnabled = true,
         bool isAccessible = true)
-        => new() { Id = id, Provider = provider, IsEnabled = isEnabled, IsAccessible = isAccessible };
+        => new() { Id = id, Provider = provider, IsAccessible = isAccessible };
 
     // --- IsAccessible: the scope IAccountAccessResolver hands over -------------------------
 
@@ -81,25 +80,16 @@ public class OffloadTargetEligibilityTests
         Assert.Equal(OffloadTargetRejection.NotImap, OffloadTargetEligibility.Evaluate(graph, SourceId));
     }
 
-    [Fact]
-    public void Evaluate_ADisabledAccount_IsRejected()
-    {
-        var disabled = Candidate(isEnabled: false);
-        Assert.Equal(OffloadTargetRejection.Disabled, OffloadTargetEligibility.Evaluate(disabled, SourceId));
-    }
-
     /// <summary>
-    /// Accessibility is checked before the provider and the enabled flag. Otherwise the form
-    /// would answer "that is not an IMAP account" or "that account is disabled" about a mailbox
-    /// the user is not allowed to know anything about.
+    /// Accessibility is checked before the provider. Otherwise the form would answer "that is not
+    /// an IMAP account" about a mailbox the user is not allowed to know anything about.
     /// </summary>
     [Theory]
-    [InlineData(ProviderType.M365, true)]
-    [InlineData(ProviderType.IMAP, false)]
-    [InlineData(ProviderType.M365, false)]
-    public void Evaluate_InaccessibleWins_OverProviderAndEnabledState(ProviderType provider, bool isEnabled)
+    [InlineData(ProviderType.M365)]
+    [InlineData(ProviderType.IMAP)]
+    public void Evaluate_InaccessibleWins_OverTheProvider(ProviderType provider)
     {
-        var candidate = Candidate(provider: provider, isEnabled: isEnabled, isAccessible: false);
+        var candidate = Candidate(provider: provider, isAccessible: false);
         Assert.Equal(OffloadTargetRejection.NotAccessible, OffloadTargetEligibility.Evaluate(candidate, SourceId));
     }
 
@@ -110,7 +100,7 @@ public class OffloadTargetEligibilityTests
     [Fact]
     public void Evaluate_SameAsSourceWins_OverEverythingElse()
     {
-        var self = Candidate(id: SourceId, provider: ProviderType.M365, isEnabled: false, isAccessible: false);
+        var self = Candidate(id: SourceId, provider: ProviderType.M365, isAccessible: false);
         Assert.Equal(OffloadTargetRejection.SameAsSource, OffloadTargetEligibility.Evaluate(self, SourceId));
     }
 
@@ -133,7 +123,6 @@ public class OffloadTargetEligibilityTests
     [InlineData(OffloadTargetRejection.NotFound, "OffloadTargetNotFound")]
     [InlineData(OffloadTargetRejection.NotAccessible, "OffloadTargetNotFound")]
     [InlineData(OffloadTargetRejection.NotImap, "OffloadTargetMustBeImap")]
-    [InlineData(OffloadTargetRejection.Disabled, "OffloadTargetDisabled")]
     public void MessageKey_MapsEveryRejection(OffloadTargetRejection rejection, string expected)
     {
         Assert.Equal(expected, OffloadTargetEligibility.MessageKey(rejection));
@@ -176,7 +165,6 @@ public class OffloadTargetEligibilityTests
             Candidate(id: 1),                                                       // the source
             Candidate(id: 2),                                                       // assigned, usable
             Candidate(id: 3, isAccessible: OffloadTargetEligibility.IsAccessible(3, allowed)),
-            Candidate(id: 4, isEnabled: false, isAccessible: OffloadTargetEligibility.IsAccessible(4, allowed)),
         };
 
         var offered = all.Where(c => OffloadTargetEligibility.IsEligible(c, SourceId)).Select(c => c.Id).ToList();

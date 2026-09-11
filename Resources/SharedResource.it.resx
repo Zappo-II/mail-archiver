@@ -3276,10 +3276,10 @@
     <value>Avvia scaricamento</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>Nessun altro account IMAP abilitato disponibile come destinazione. Crearne uno prima.</value>
+    <value>Nessun altro account IMAP disponibile come destinazione. Crearne uno prima.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Nessuna delle caselle assegnate a te può essere usata come destinazione. Chiedi a un amministratore di assegnarti un altro account IMAP abilitato.</value>
+    <value>Nessuna delle caselle assegnate a te può essere usata come destinazione. Chiedi a un amministratore di assegnarti un altro account IMAP.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Scegliere una casella di destinazione.</value>
@@ -3292,9 +3292,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>La casella di destinazione deve essere un account IMAP.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>La casella di destinazione selezionata è disabilitata.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Fornire una finestra di mesi o una data di inizio.</value>

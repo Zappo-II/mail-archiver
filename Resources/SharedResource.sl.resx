@@ -3276,10 +3276,10 @@
     <value>Začni prenos</value>
   </data>
   <data name="OffloadNoTargets" xml:space="preserve">
-    <value>Na voljo ni drugega omogočenega računa IMAP kot cilja. Najprej ga ustvarite.</value>
+    <value>Na voljo ni drugega računa IMAP kot cilja. Najprej ga ustvarite.</value>
   </data>
   <data name="OffloadNoTargetsAssigned" xml:space="preserve">
-    <value>Nobeden od vam dodeljenih nabiralnikov ni mogoče uporabiti kot cilj. Prosite skrbnika, naj vam dodeli še en omogočen račun IMAP.</value>
+    <value>Nobeden od vam dodeljenih nabiralnikov ni mogoče uporabiti kot cilj. Prosite skrbnika, naj vam dodeli še en račun IMAP.</value>
   </data>
   <data name="OffloadTargetRequired" xml:space="preserve">
     <value>Izberite ciljni nabiralnik.</value>
@@ -3292,9 +3292,6 @@
   </data>
   <data name="OffloadTargetMustBeImap" xml:space="preserve">
     <value>Ciljni nabiralnik mora biti račun IMAP.</value>
-  </data>
-  <data name="OffloadTargetDisabled" xml:space="preserve">
-    <value>Izbrani ciljni nabiralnik je onemogočen.</value>
   </data>
   <data name="OffloadCutoffRequired" xml:space="preserve">
     <value>Navedite okno mesecev ali datum od.</value>
