@@ -1553,7 +1553,7 @@ namespace MailArchiver.Controllers
 
             var candidates = await candidateQuery
                 .OrderBy(a => a.Name)
-                .Select(a => new { a.Id, a.Name, a.EmailAddress, a.Provider, a.IsEnabled })
+                .Select(a => new { a.Id, a.Name, a.EmailAddress, a.Provider })
                 .ToListAsync();
 
             var targets = candidates

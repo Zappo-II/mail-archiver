@@ -50,7 +50,7 @@ namespace MailArchiver.Models.ViewModels
         [Display(Name = "OffloadMarkAsSeen")]
         public bool MarkAsSeen { get; set; } = true;
 
-        /// <summary>Accounts that can be offloaded into, i.e. enabled IMAP accounts.</summary>
+        /// <summary>Accounts that can be offloaded into, i.e. IMAP accounts (enabled or not).</summary>
         public List<TargetAccountOption> AvailableTargets { get; set; } = new();
 
         /// <summary>
