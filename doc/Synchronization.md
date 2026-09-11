@@ -109,7 +109,7 @@ The sync behavior is controlled by the `MailSync` section of `appsettings.json` 
 | `MailSync:CommandTimeoutSeconds` | `600` | IMAP command timeout. |
 | `MailSync:AlwaysForceFullSync` | `false` | When `true`, every cycle is a Full Sync for all accounts. **Diagnostics only – keep off in production.** |
 | `MailSync:IgnoreSelfSignedCert` | `false` | Accept self-signed TLS certificates for IMAP connections. |
-| `MailSync:MaxConcurrentSyncs` | `1` | Maximum number of account syncs that may run in parallel within one poll cycle. `1` reproduces the previous sequential behaviour; increase to parallelize — mind provider rate limits and local resource usage. |
+| `MailSync:MaxConcurrentSyncs` | `1` | How many account syncs may run at the same time. Slots are refilled as they come free, see [How accounts are scheduled](#-how-accounts-are-scheduled). `1` keeps syncs sequential; increase to parallelize — mind provider rate limits and local resource usage. |
 | `MailSync:InterAccountDelaySeconds` | `0` | Optional stagger delay in seconds applied at the end of each account sync task. Useful to avoid burst-starts when `MaxConcurrentSyncs > 1`. `0` disables it. |
 | `MailSync:GlobalExcludedFolders` | _empty_ | Folders excluded from synchronization for every account, additive to each account's own list. See [Excluded Folders](#-excluded-folders) below. |
 
@@ -295,6 +295,43 @@ IMAP only. Microsoft Graph enumerates folders through the API, where a deleted f
 returned, so the situation cannot arise there.
 
 Applies to both providers, IMAP and M365 (Graph).
+
+---
+
+## 🗓️ How accounts are scheduled
+
+A background tick runs once a minute. It loads the enabled accounts, works out which are due, and
+starts as many of them as there are free sync slots: `MailSync:MaxConcurrentSyncs` of them in total.
+It does **not** wait for the syncs it starts. Anything that does not fit is left for the next tick,
+which re-decides from scratch.
+
+Each account's next run is scheduled when its sync **finishes**, from that moment plus its interval.
+An account whose sync takes longer than its interval is therefore due again as soon as it is done,
+but never twice at once: an account already running is skipped, not queued.
+
+When more accounts are due than there are slots, the **most overdue goes first**. Ties break by
+account id so a backlog is worked through reproducibly.
+
+A finishing sync wakes the scheduler immediately, so the loop does not sit out its minute of idle
+time when a slot has already come free: a backlog is worked through back-to-back even with
+`MaxConcurrentSyncs: 1`, exactly as the old batch loop did, while the minute remains only the
+longest gap between two looks at the account list.
+
+With more than one slot, consider setting `MailSync:TimeoutMinutes`, which is `0` (no timeout) by
+default. A sync keeps its slot for as long as it runs, so a single account that stops making
+progress permanently reduces the slots available to everything else. A timeout ends such a run as a
+pause that keeps its checkpoints, and the slot is free again on the next tick.
+
+> ℹ️ Before this, the tick collected every due account and waited for all of them before looking
+> again. One large mailbox therefore held up every other account for as long as it ran: the slots
+> came free, but nothing was re-evaluated until the last one returned, so an installation with
+> `MaxConcurrentSyncs: 10` and one six-hour mailbox effectively synced everything on a six-hour
+> interval. Accounts that finish quickly now keep to their own interval regardless of what else is
+> running.
+
+On shutdown the service waits up to 30 seconds for syncs still in flight rather than tearing the
+process down underneath an open IMAP session. They are not cancelled; see
+[Stopping a Sync Early](#-stopping-a-sync-early) for what does stop a sync.
 
 ---
 
