@@ -78,9 +78,11 @@ namespace MailArchiver.Services
             // A slot being released wakes the tick early. Without this the loop would sit out its
             // full idle delay even though a slot - and possibly a queue of due accounts - is
             // waiting; with the default MaxConcurrentSyncs of 1 a backlog drained at one account
-            // per minute instead of back-to-back. Replaced with a fresh source after every
-            // wake-up so each release can signal again. Set through TrySetResult, so a release
-            // racing the replacement is harmless.
+            // per minute instead of back-to-back. Re-armed with a fresh source after every wait
+            // and before the next dispatch pass, so every release can signal - including one
+            // that lands while the tick is mid-pass. A release racing the re-arm itself is
+            // still covered: the finisher frees the semaphore before signaling, so the pass
+            // sees that slot directly.
             var slotFreed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             // ISyncJobService is a singleton, so it can be resolved once here. It knows about syncs
@@ -264,8 +266,9 @@ namespace MailArchiver.Services
 
                                 // Wake the tick early so it can hand the freed slot to the next
                                 // due account without sitting out the idle delay. TrySetResult:
-                                // a finish racing the loop's replacement of the source is
-                                // harmless (the loop reads whichever source it is awaiting).
+                                // the tick re-arms the source before its next dispatch pass, so
+                                // a finish racing the re-arm is still covered - the semaphore
+                                // above was already freed, so the pass sees the slot directly.
                                 slotFreed.TrySetResult();
 
                                 completion.SetResult();
@@ -298,22 +301,20 @@ namespace MailArchiver.Services
                     inFlight.Count);
 
                 // Wake early when a slot came free so a backlog drains back-to-back; otherwise
-                // sit out the idle cadence. Shutdown is delivered by the delay leg: WhenAny does
-                // not observe its losing side, so only the delay throws on cancellation and ends
-                // the loop - the wake-up path returns normally.
-                try
-                {
-                    await Task.WhenAny(
-                        slotFreed.Task,
-                        Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), stoppingToken));
-                }
-                catch (OperationCanceledException)
-                {
-                    // Shutdown during the inter-poll delay — exit gracefully.
-                    break;
-                }
+                // sit out the idle cadence. WhenAny returns the winner without observing its
+                // status - it never rethrows - so on shutdown the cancelled delay simply wins
+                // the race and the loop exits through the while condition below.
+                await Task.WhenAny(
+                    slotFreed.Task,
+                    Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), stoppingToken));
 
+                // Re-arm before the next pass, not after it: a signal landing while the tick is
+                // mid-dispatch would otherwise hit the already-completed source and be lost,
+                // making a due account wait out the full idle delay.
                 slotFreed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                if (stoppingToken.IsCancellationRequested)
+                    break;
             }
 
             // Shutdown. The syncs do not observe the host token — that would abort them mid-folder
