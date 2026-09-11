@@ -312,6 +312,11 @@ but never twice at once: an account already running is skipped, not queued.
 When more accounts are due than there are slots, the **most overdue goes first**. Ties break by
 account id so a backlog is worked through reproducibly.
 
+A finishing sync wakes the scheduler immediately, so the loop does not sit out its minute of idle
+time when a slot has already come free: a backlog is worked through back-to-back even with
+`MaxConcurrentSyncs: 1`, exactly as the old batch loop did, while the minute remains only the
+longest gap between two looks at the account list.
+
 With more than one slot, consider setting `MailSync:TimeoutMinutes`, which is `0` (no timeout) by
 default. A sync keeps its slot for as long as it runs, so a single account that stops making
 progress permanently reduces the slots available to everything else. A timeout ends such a run as a

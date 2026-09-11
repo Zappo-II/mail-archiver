@@ -14,8 +14,10 @@ namespace MailArchiver.Services
         private readonly ILogger<MailSyncBackgroundService> _logger;
         private readonly IConfiguration _configuration;
 
-        // Polling loop cadence. Short enough that per-account intervals (down to 1 minute)
-        // are respected reasonably, long enough to avoid busy-waiting.
+        // Longest the tick loop waits between passes. A finishing sync wakes it early (see
+        // slotFreed in ExecuteAsync), so this bounds the idle cadence, not the reaction time
+        // to a freed slot. Short enough that per-account intervals (down to 1 minute) are
+        // respected reasonably, long enough to avoid busy-waiting.
         private const int PollIntervalSeconds = 60;
         // How long shutdown waits for syncs that are still running before giving up on them.
         private const int ShutdownGraceSeconds = 30;
@@ -72,6 +74,14 @@ namespace MailArchiver.Services
             // inside a finally, on a task nobody is observing.
             var syncSlots = new SemaphoreSlim(maxConcurrentSyncs, maxConcurrentSyncs);
             var inFlight = new ConcurrentDictionary<int, Task>();
+
+            // A slot being released wakes the tick early. Without this the loop would sit out its
+            // full idle delay even though a slot - and possibly a queue of due accounts - is
+            // waiting; with the default MaxConcurrentSyncs of 1 a backlog drained at one account
+            // per minute instead of back-to-back. Replaced with a fresh source after every
+            // wake-up so each release can signal again. Set through TrySetResult, so a release
+            // racing the replacement is harmless.
+            var slotFreed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             // ISyncJobService is a singleton, so it can be resolved once here. It knows about syncs
             // this loop did not start - a manual sync from the account page - which inFlight cannot.
@@ -251,6 +261,13 @@ namespace MailArchiver.Services
 
                                 inFlight.TryRemove(account.Id, out _);
                                 syncSlots.Release();
+
+                                // Wake the tick early so it can hand the freed slot to the next
+                                // due account without sitting out the idle delay. TrySetResult:
+                                // a finish racing the loop's replacement of the source is
+                                // harmless (the loop reads whichever source it is awaiting).
+                                slotFreed.TrySetResult();
+
                                 completion.SetResult();
 
                                 // The batch loop compacted the LOH once after every cycle. There is no
@@ -279,15 +296,24 @@ namespace MailArchiver.Services
 
                 _logger.LogDebug("Mail sync tick done, {InFlight} sync(s) in flight. Waiting for next poll.",
                     inFlight.Count);
+
+                // Wake early when a slot came free so a backlog drains back-to-back; otherwise
+                // sit out the idle cadence. Shutdown is delivered by the delay leg: WhenAny does
+                // not observe its losing side, so only the delay throws on cancellation and ends
+                // the loop - the wake-up path returns normally.
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), stoppingToken);
+                    await Task.WhenAny(
+                        slotFreed.Task,
+                        Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), stoppingToken));
                 }
                 catch (OperationCanceledException)
                 {
                     // Shutdown during the inter-poll delay — exit gracefully.
                     break;
                 }
+
+                slotFreed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             }
 
             // Shutdown. The syncs do not observe the host token — that would abort them mid-folder
