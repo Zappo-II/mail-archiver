@@ -37,6 +37,24 @@ internal static class ServiceFactory
             memoryCache: null);
 
     /// <summary>
+    /// Creates an EmailCoreService whose dashboard cache is backed by a MemoryCache with a
+    /// small SizeLimit, so eviction behavior can be asserted without touching DI.
+    /// </summary>
+    public static (EmailCoreService Service, Microsoft.Extensions.Caching.Memory.IMemoryCache Cache)
+        CreateEmailCoreServiceWithSizeLimitedCache(MailArchiverDbContext ctx, long sizeLimit)
+    {
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions { SizeLimit = sizeLimit });
+        var svc = new EmailCoreService(ctx,
+            NullLogger<EmailCoreService>.Instance,
+            new DateTimeHelper(Options.Create(new TimeZoneOptions { DisplayTimeZoneId = "Europe/Berlin" })),
+            Options.Create(new BatchOperationOptions()),
+            Options.Create(new Models.DashboardOptions { CacheSeconds = 60 }),
+            memoryCache: cache);
+        return (svc, cache);
+    }
+
+    /// <summary>
     /// Creates an EmailCoreService with the dashboard features switched off, so that the
     /// "as it was before" state can be asserted rather than described.
     /// </summary>

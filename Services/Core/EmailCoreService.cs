@@ -1248,7 +1248,11 @@ namespace MailArchiver.Services.Core
                 await decorate(value);
 
             if (cacheSeconds > 0)
-                _memoryCache.Set(cacheKey, value, TimeSpan.FromSeconds(cacheSeconds));
+                _memoryCache.Set(cacheKey, value, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(cacheSeconds),
+                    Size = 1
+                });
 
             return copy(value);
         }
