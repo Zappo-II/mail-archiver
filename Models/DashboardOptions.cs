@@ -12,6 +12,17 @@ namespace MailArchiver.Models
         public int CacheSeconds { get; set; } = 60;
 
         /// <summary>
+        /// How often the DashboardStatsRefreshService recomputes the expensive
+        /// dashboard aggregates (totals with their incoming and outgoing parts,
+        /// account panel and domains, the default chart series) into the
+        /// DashboardStatsCache table. On large installations the dashboard reads
+        /// those prepared values instead of aggregating millions of rows in the
+        /// request path. 0 disables the background refresh and
+        /// makes the dashboard compute everything live again.
+        /// </summary>
+        public int RefreshIntervalMinutes { get; set; } = 15;
+
+        /// <summary>
         /// Whether the counter cards carry their incoming and outgoing parts, and the account
         /// card the number of domains.
         /// <para>

@@ -1134,91 +1134,143 @@ namespace MailArchiver.Services.Core
         public async Task<DashboardViewModel> GetDashboardStatisticsAsync(
             Func<int, bool>? lastRunHadIssues = null)
         {
-            var hasIssues = lastRunHadIssues ?? (_ => false);
-            return await GetOrCreateCachedStatisticsAsync("admin", queryable =>
-            {
-                // Switched off, the parts are not computed rather than computed and hidden: a
-                // plain count reads an index, while the split reads the direction column and the
-                // attachment one joins to the mail it hangs on.
-                var splits = ShowDirectionSplits;
-                var emails = splits ? CountEmailsByDirection(queryable.ArchivedEmails) : null;
-                var attachments = splits ? CountAttachmentsByDirection(queryable.EmailAttachments) : null;
+            // The heavy aggregates come from the DashboardStatsCache row that
+            // DashboardStatsRefreshService keeps up to date, so a dashboard load
+            // never aggregates millions of rows in the request path. RecentEmails
+            // are deliberately NOT part of that row: ten index-backed rows are
+            // cheap live and in a periodically refreshed snapshot they would be
+            // up to RefreshIntervalMinutes old.
+            var model = await GetOrCreateCachedStatisticsAsync("admin", queryable =>
+                // Fallback while the table has no usable admin row yet (first start,
+                // Dashboard:RefreshIntervalMinutes = 0, or a row computed with other
+                // settings): same queries the background service runs, once, then
+                // cached in memory.
+                BuildAdminStatistics(queryable, lastRunHadIssues ?? (_ => false)));
 
-                // One read of the accounts serves both numbers on the account card. Counting the
-                // rows separately from the addresses they are taken from would let the two
-                // disagree over an account added or removed between the two queries.
-                var accountAddresses = splits
-                    ? queryable.MailAccounts.Select(a => a.EmailAddress).ToList()
-                    : null;
-
-                return new DashboardViewModel
+            model.RecentEmails = await _context.ArchivedEmails
+                .OrderByDescending(e => e.SentDate)
+                .Select(e => new RecentEmailDto
                 {
-                    TotalEmails = emails?.Total ?? queryable.ArchivedEmails.Count(),
-                    IncomingEmails = emails?.Incoming ?? 0,
-                    OutgoingEmails = emails?.Outgoing ?? 0,
-                    TotalAccounts = accountAddresses?.Count ?? queryable.MailAccounts.Count(),
-                    AccountDomains = accountAddresses == null ? 0 : CountAccountDomains(accountAddresses),
-                    TotalAttachments = attachments?.Total ?? queryable.EmailAttachments.Count(),
-                    IncomingAttachments = attachments?.Incoming ?? 0,
-                    OutgoingAttachments = attachments?.Outgoing ?? 0,
-                    // The panel sits next to the ten most recent emails and is meant to be read at
-                    // a glance, not to be a second account list: that one is one click away and
-                    // pages. Accounts that never completed a sync sort last by their epoch
-                    // timestamp, which is where they belong when mailboxes are provisioned
-                    // disabled and switched on later.
-                    EmailsPerAccount = BuildAccountPanel(queryable.MailAccounts, hasIssues),
-                    Series = BuildDefaultSeries(queryable.ArchivedEmails),
-                    RecentEmails = queryable.ArchivedEmails
-                        .OrderByDescending(e => e.SentDate)
-                        .Select(e => new RecentEmailDto
-                        {
-                            Id = e.Id,
-                            Subject = e.Subject,
-                            From = e.From,
-                            SentDate = e.SentDate,
-                            IsOutgoing = e.IsOutgoing,
-                            MailAccountName = e.MailAccount.Name
-                        })
-                        .Take(10)
-                        .ToList()
-                };
-            });
+                    Id = e.Id,
+                    Subject = e.Subject,
+                    From = e.From,
+                    SentDate = e.SentDate,
+                    IsOutgoing = e.IsOutgoing,
+                    MailAccountName = e.MailAccount.Name
+                })
+                .Take(10)
+                .ToListAsync();
+
+            return model;
         }
 
         /// <summary>
-        /// Computes or fetches cached dashboard statistics. The factory receives the
-        /// DbContext so it can build queries; values are enumerated synchronously on
-        /// a background thread (EF does not allow parallel async evaluation inside a
-        /// single context). The result is cached for <see cref="DashboardOptions.CacheSeconds"/>.
-        /// Dynamic per-request decorations (storage, sync flags, active jobs) are applied
-        /// by the caller and are NOT cached.
+        /// The admin statistics without the recent emails and the database size. One definition
+        /// for the request path and for DashboardStatsRefreshService, so the stored row and the
+        /// live fallback cannot drift apart.
+        /// </summary>
+        internal DashboardViewModel BuildAdminStatistics(
+            MailArchiverDbContext queryable, Func<int, bool> lastRunHadIssues)
+        {
+            // Switched off, the parts are not computed rather than computed and hidden: a
+            // plain count reads an index, while the split reads the direction column and the
+            // attachment one joins to the mail it hangs on.
+            var splits = ShowDirectionSplits;
+            var emails = splits ? CountEmailsByDirection(queryable.ArchivedEmails) : null;
+            var attachments = splits ? CountAttachmentsByDirection(queryable.EmailAttachments) : null;
+
+            // One read of the accounts serves both numbers on the account card. Counting the
+            // rows separately from the addresses they are taken from would let the two
+            // disagree over an account added or removed between the two queries.
+            var accountAddresses = splits
+                ? queryable.MailAccounts.Select(a => a.EmailAddress).ToList()
+                : null;
+
+            return new DashboardViewModel
+            {
+                TotalEmails = emails?.Total ?? queryable.ArchivedEmails.Count(),
+                IncomingEmails = emails?.Incoming ?? 0,
+                OutgoingEmails = emails?.Outgoing ?? 0,
+                TotalAccounts = accountAddresses?.Count ?? queryable.MailAccounts.Count(),
+                AccountDomains = accountAddresses == null ? 0 : CountAccountDomains(accountAddresses),
+                TotalAttachments = attachments?.Total ?? queryable.EmailAttachments.Count(),
+                IncomingAttachments = attachments?.Incoming ?? 0,
+                OutgoingAttachments = attachments?.Outgoing ?? 0,
+                // The panel sits next to the ten most recent emails and is meant to be read at
+                // a glance, not to be a second account list: that one is one click away and
+                // pages. Accounts that never completed a sync sort last by their epoch
+                // timestamp, which is where they belong when mailboxes are provisioned
+                // disabled and switched on later.
+                EmailsPerAccount = BuildAccountPanel(queryable.MailAccounts, lastRunHadIssues),
+                Series = BuildDefaultSeries(queryable.ArchivedEmails)
+            };
+        }
+
+        /// <summary>
+        /// Computes or fetches cached dashboard statistics. Two layers: the short-lived
+        /// in-memory cache first (see <see cref="DashboardOptions.CacheSeconds"/>), then
+        /// for the admin scope the DashboardStatsCache row that
+        /// DashboardStatsRefreshService recomputes periodically (see
+        /// <see cref="DashboardOptions.RefreshIntervalMinutes"/>). The factory only runs
+        /// as a fallback when neither has a usable row. Values are enumerated synchronously
+        /// on a background thread (EF does not allow parallel async evaluation inside a
+        /// single context). A per-key semaphore keeps concurrent cold requests from each
+        /// running the full workload (cache stampede). Dynamic per-request decorations
+        /// (storage, sync flags, active jobs) are applied by the caller and are NOT cached.
         /// </summary>
         internal async Task<DashboardViewModel> GetOrCreateCachedStatisticsAsync(
             string cacheKeySuffix,
             Func<MailArchiverDbContext, DashboardViewModel> statisticsFactory)
         {
-            return await GetOrCreateCachedAsync(
-                $"dashboard-stats-{cacheKeySuffix}",
-                statisticsFactory,
-                CloneStatistics,
-                async model =>
-                {
-                    try
+            var cacheKey = $"dashboard-stats-{cacheKeySuffix}";
+
+            if (_dashboardOptions.CacheSeconds > 0
+                && _memoryCache.TryGetValue(cacheKey, out DashboardViewModel? cached)
+                && cached != null)
+                return CloneStatistics(cached);
+
+            // The in-process lock is what makes this stampede-proof: the first cold
+            // request computes, concurrent ones wait and then read the fresh entry.
+            var gate = StatisticsGates.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync();
+            try
+            {
+                return await GetOrCreateCachedAsync(
+                    cacheKey,
+                    statisticsFactory,
+                    CloneStatistics,
+                    async model =>
                     {
-                        var totalDatabaseSizeBytes = await GetDatabaseSizeAsync();
-                        model.TotalStorageUsed = FormatFileSize(totalDatabaseSizeBytes);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error getting database size: {Message}", ex.Message);
-                        model.TotalStorageUsed = string.Empty;
-                    }
-                });
+                        try
+                        {
+                            var totalDatabaseSizeBytes = await GetDatabaseSizeAsync();
+                            model.TotalStorageUsed = FormatFileSize(totalDatabaseSizeBytes);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error getting database size: {Message}", ex.Message);
+                            model.TotalStorageUsed = string.Empty;
+                        }
+                    },
+                    () => TryGetPrecomputedStatisticsAsync(cacheKeySuffix));
+            }
+            finally
+            {
+                gate.Release();
+            }
         }
 
         /// <summary>
-        /// Cache mechanics shared by everything the dashboard computes: look up, otherwise build
-        /// on a background thread, cache, and hand out a copy either way.
+        /// Static per-key gates: EmailCoreService is scoped (one instance per request),
+        /// so the stampede lock has to live outside the instances to synchronize them.
+        /// </summary>
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim>
+            StatisticsGates = new();
+
+        /// <summary>
+        /// Cache mechanics shared by everything the dashboard computes: look up, otherwise take
+        /// the stored value or build on a background thread, cache, and hand out a copy either
+        /// way.
         /// </summary>
         /// <param name="copy">
         /// Deep copy of the cached value. Every caller gets one, because the callers decorate
@@ -1227,13 +1279,19 @@ namespace MailArchiver.Services.Core
         /// </param>
         /// <param name="decorate">
         /// Work that belongs in the cached value but cannot run inside the factory, which is
-        /// synchronous because EF does not allow parallel async evaluation on one context.
+        /// synchronous because EF does not allow parallel async evaluation on one context. Runs
+        /// only on what the factory built: a stored value is complete as it is read.
+        /// </param>
+        /// <param name="precomputed">
+        /// Reads the value DashboardStatsRefreshService stored, or null when there is none to
+        /// use, in which case the factory builds it.
         /// </param>
         private async Task<T> GetOrCreateCachedAsync<T>(
             string cacheKey,
             Func<MailArchiverDbContext, T> factory,
             Func<T, T> copy,
-            Func<T, Task>? decorate = null) where T : class
+            Func<T, Task>? decorate = null,
+            Func<Task<T?>>? precomputed = null) where T : class
         {
             var cacheSeconds = _dashboardOptions.CacheSeconds;
 
@@ -1242,10 +1300,15 @@ namespace MailArchiver.Services.Core
                 && cached != null)
                 return copy(cached);
 
-            var value = await Task.Run(() => factory(_context));
+            var value = precomputed == null ? null : await precomputed();
 
-            if (decorate != null)
-                await decorate(value);
+            if (value == null)
+            {
+                value = await Task.Run(() => factory(_context));
+
+                if (decorate != null)
+                    await decorate(value);
+            }
 
             if (cacheSeconds > 0)
                 _memoryCache.Set(cacheKey, value, new MemoryCacheEntryOptions
@@ -1256,6 +1319,92 @@ namespace MailArchiver.Services.Core
 
             return copy(value);
         }
+
+        /// <summary>
+        /// Reads the pre-computed row written by DashboardStatsRefreshService. Only the
+        /// admin scope is materialized; user scopes would mean one row per account
+        /// assignment set, which is why they still compute live. Returns null when the
+        /// table has no usable row (or does not exist), letting the caller fall back to
+        /// computing once itself.
+        /// </summary>
+        private async Task<DashboardViewModel?> TryGetPrecomputedStatisticsAsync(string cacheKeySuffix)
+        {
+            if (!string.Equals(cacheKeySuffix, "admin", StringComparison.Ordinal))
+                return null;
+
+            var row = await TryGetPrecomputedRowAsync();
+            if (row == null)
+                return null;
+
+            return new DashboardViewModel
+            {
+                TotalEmails = ClampToInt(row.TotalEmails),
+                IncomingEmails = ClampToInt(row.IncomingEmails),
+                OutgoingEmails = ClampToInt(row.OutgoingEmails),
+                TotalAccounts = row.TotalAccounts,
+                AccountDomains = row.AccountDomains,
+                TotalAttachments = ClampToInt(row.TotalAttachments),
+                IncomingAttachments = ClampToInt(row.IncomingAttachments),
+                OutgoingAttachments = ClampToInt(row.OutgoingAttachments),
+                TotalStorageUsed = FormatFileSize(row.TotalDatabaseSizeBytes),
+                EmailsPerAccount = row.EmailsPerAccount ?? new List<AccountStatistics>(),
+                Series = row.DefaultSeries ?? new DashboardSeries(),
+                RecentEmails = new List<RecentEmailDto>()
+            };
+        }
+
+        /// <summary>
+        /// The default chart selection of the admin scope as stored with the statistics, so the
+        /// chart endpoint answers it with the numbers the first paint showed. Null for every
+        /// other selection and whenever there is no usable row.
+        /// </summary>
+        private async Task<DashboardSeries?> TryGetPrecomputedSeriesAsync(
+            List<int>? accountIds, PeriodGranularity granularity, PeriodWindow window,
+            bool outgoingSenders, int offset)
+        {
+            if (accountIds != null
+                || granularity != DashboardPeriods.DefaultGranularity
+                || window.Key != DashboardPeriods.DefaultWindowKey
+                || outgoingSenders
+                || offset != 0)
+                return null;
+
+            var row = await TryGetPrecomputedRowAsync();
+            return row?.DefaultSeries;
+        }
+
+        /// <summary>
+        /// The admin row, provided it was computed with the settings in force now. A row from
+        /// before the switches were changed, or from before the columns carrying the parts
+        /// existed, would show parts that are not wanted or zeros where parts are, so it is
+        /// passed over until the next refresh replaces it.
+        /// </summary>
+        private async Task<DashboardStatsCache?> TryGetPrecomputedRowAsync()
+        {
+            try
+            {
+                var row = await _context.DashboardStatsCaches
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.Key == "admin");
+
+                if (row == null
+                    || string.IsNullOrWhiteSpace(row.DefaultSeriesJson)
+                    || row.ComputedWithDirectionSplits != ShowDirectionSplits
+                    || row.ComputedWithSelectablePeriods != SelectablePeriods)
+                    return null;
+
+                return row;
+            }
+            catch (Exception ex)
+            {
+                // Missing table (migration not applied yet) or a broken connection:
+                // never let the fallback path die because the fast path is unavailable.
+                _logger.LogWarning(ex, "Reading pre-computed dashboard statistics failed, falling back to live computation: {Message}", ex.Message);
+                return null;
+            }
+        }
+
+        private static int ClampToInt(long value) => (int)Math.Min(value, int.MaxValue);
 
         /// <summary>
         /// Deep-copies a series so that a caller holding one cannot reach into the cache entry
@@ -1276,7 +1425,7 @@ namespace MailArchiver.Services.Core
                 CanGoBack = source.CanGoBack,
                 CanGoForward = source.CanGoForward,
                 RangeLabel = source.RangeLabel,
-                Emails = source.Emails
+                Emails = (source.Emails ?? Enumerable.Empty<EmailCountByPeriod>())
                     .Select(m => new EmailCountByPeriod
                     {
                         Period = m.Period,
@@ -1284,7 +1433,7 @@ namespace MailArchiver.Services.Core
                         Outgoing = m.Outgoing
                     })
                     .ToList(),
-                TopSenders = source.TopSenders
+                TopSenders = (source.TopSenders ?? Enumerable.Empty<EmailCountByAddress>())
                     .Select(s => new EmailCountByAddress { EmailAddress = s.EmailAddress, Count = s.Count })
                     .ToList()
             };
@@ -1292,7 +1441,9 @@ namespace MailArchiver.Services.Core
 
         /// <summary>
         /// Deep-copies the cacheable statistics so per-request mutations (StorageUsed,
-        /// IsSyncing, IsSyncPending, LastRunHadIssues) never leak into the shared cache entry.
+        /// IsSyncing, IsSyncPending, LastRunHadIssues) never leak into the shared cache
+        /// entry. List members may be null: the admin path fills RecentEmails outside
+        /// this cache, so a model straight from the factory has it unset.
         /// </summary>
         private static DashboardViewModel CloneStatistics(DashboardViewModel source)
         {
@@ -1307,7 +1458,7 @@ namespace MailArchiver.Services.Core
                 IncomingAttachments = source.IncomingAttachments,
                 OutgoingAttachments = source.OutgoingAttachments,
                 TotalStorageUsed = source.TotalStorageUsed,
-                EmailsPerAccount = source.EmailsPerAccount
+                EmailsPerAccount = (source.EmailsPerAccount ?? Enumerable.Empty<AccountStatistics>())
                     .Select(a => new AccountStatistics
                     {
                         AccountId = a.AccountId,
@@ -1320,7 +1471,7 @@ namespace MailArchiver.Services.Core
                     })
                     .ToList(),
                 Series = CloneSeries(source.Series),
-                RecentEmails = source.RecentEmails
+                RecentEmails = (source.RecentEmails ?? Enumerable.Empty<RecentEmailDto>())
                     .Select(e => new RecentEmailDto
                     {
                         Id = e.Id,
@@ -1569,7 +1720,8 @@ namespace MailArchiver.Services.Core
                 var range = DashboardPeriods.Resolve(
                     granularity, window, now, EarliestSentDate(emails), offset);
                 return BuildSeries(emails, range, outgoingSenders);
-            }, CloneSeries);
+            }, CloneSeries,
+            precomputed: () => TryGetPrecomputedSeriesAsync(accountIds, granularity, window, outgoingSenders, offset));
         }
 
         /// <summary>

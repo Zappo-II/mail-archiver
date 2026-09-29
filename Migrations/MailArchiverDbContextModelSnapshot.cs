@@ -785,6 +785,58 @@ namespace MailArchiver.Migrations
                     b.ToTable("AccountStorageBackfillState", "mail_archiver");
                 });
 
+            modelBuilder.Entity("MailArchiver.Models.DashboardStatsCache", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("text");
+
+                    b.Property<int>("AccountDomains")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ComputedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool?>("ComputedWithDirectionSplits")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("ComputedWithSelectablePeriods")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("DefaultSeriesJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("EmailsPerAccountJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<long>("IncomingAttachments")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("IncomingEmails")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("OutgoingAttachments")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("OutgoingEmails")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("TotalAccounts")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("TotalAttachments")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TotalDatabaseSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TotalEmails")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("DashboardStatsCache", "mail_archiver");
+                });
+
             modelBuilder.Entity("MailArchiver.Models.BandwidthUsage", b =>
                 {
                     b.HasOne("MailArchiver.Models.MailAccount", "MailAccount")

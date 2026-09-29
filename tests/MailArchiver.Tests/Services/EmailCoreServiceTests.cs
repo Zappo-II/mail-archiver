@@ -1784,6 +1784,183 @@ public class EmailCoreServiceTests
     }
 
     // ============================================================
+    // Pre-computed dashboard statistics (DashboardStatsRefreshService)
+    // ============================================================
+
+    private static async Task DeleteAdminStatsRowAsync(MailArchiverDbContext ctx)
+    {
+        var rows = await ctx.DashboardStatsCaches.Where(c => c.Key == "admin").ToListAsync();
+        ctx.DashboardStatsCaches.RemoveRange(rows);
+        await ctx.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task RefreshedRow_CarriesTheSplitsAndTheDefaultSeries_AndTheDashboardReadsIt()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "in-1", "a@x.com", "b@x.com", isOutgoing: false));
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "in-2", "a@x.com", "b@x.com", isOutgoing: false));
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "out-1", "b@x.com", "c@x.com", isOutgoing: true));
+            await ctx.SaveChangesAsync();
+
+            var refresh = ServiceFactory.CreateDashboardStatsRefreshService(ctx, new DashboardOptions());
+            Assert.True(await refresh.RefreshAdminStatisticsAsync());
+
+            var row = await ctx.DashboardStatsCaches.AsNoTracking().SingleAsync(c => c.Key == "admin");
+            Assert.Equal(row.TotalEmails, row.IncomingEmails + row.OutgoingEmails);
+            Assert.True(row.AccountDomains >= 1);
+            Assert.True(row.ComputedWithDirectionSplits);
+            Assert.True(row.ComputedWithSelectablePeriods);
+            Assert.Equal(nameof(PeriodGranularity.Month), row.DefaultSeries!.Granularity);
+
+            // Mail archived after the refresh is not in the stored numbers, which is how the
+            // test tells a read of the row from a live count. The recent emails stay live.
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "after-refresh", "a@x.com", "b@x.com"));
+            await ctx.SaveChangesAsync();
+
+            var dash = await ServiceFactory.CreateEmailCoreServiceNoCache(ctx).GetDashboardStatisticsAsync();
+
+            Assert.Equal(row.TotalEmails, dash.TotalEmails);
+            Assert.Equal(row.IncomingEmails, dash.IncomingEmails);
+            Assert.Equal(row.OutgoingEmails, dash.OutgoingEmails);
+            Assert.Equal(row.AccountDomains, dash.AccountDomains);
+            Assert.Equal(
+                row.DefaultSeries.Emails.Sum(e => e.Count),
+                dash.Series.Emails.Sum(e => e.Count));
+            Assert.Contains(dash.RecentEmails, e => e.Subject == "after-refresh");
+        }
+        finally
+        {
+            await DeleteAdminStatsRowAsync(ctx);
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RefreshedRow_ComputedWithOtherSettings_IsPassedOver()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "in-1", "a@x.com", "b@x.com", isOutgoing: false));
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "out-1", "b@x.com", "c@x.com", isOutgoing: true));
+            await ctx.SaveChangesAsync();
+
+            // Stored without the parts, read with them wanted: the row would show zeros where
+            // the parts belong, so the dashboard counts live instead.
+            var refresh = ServiceFactory.CreateDashboardStatsRefreshService(ctx,
+                new DashboardOptions { ShowDirectionSplits = false });
+            Assert.True(await refresh.RefreshAdminStatisticsAsync());
+
+            var row = await ctx.DashboardStatsCaches.AsNoTracking().SingleAsync(c => c.Key == "admin");
+            Assert.Equal(0, row.IncomingEmails + row.OutgoingEmails);
+
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "after-refresh", "a@x.com", "b@x.com"));
+            await ctx.SaveChangesAsync();
+
+            var dash = await ServiceFactory.CreateEmailCoreServiceNoCache(ctx).GetDashboardStatisticsAsync();
+
+            Assert.Equal(row.TotalEmails + 1, dash.TotalEmails);
+            Assert.Equal(dash.TotalEmails, dash.IncomingEmails + dash.OutgoingEmails);
+        }
+        finally
+        {
+            await DeleteAdminStatsRowAsync(ctx);
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RowFromBeforeTheSettingsWereRecorded_IsPassedOver()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "in-1", "a@x.com", "b@x.com"));
+            await ctx.SaveChangesAsync();
+
+            // What a row written before MigrateV2609_4 looks like after it: the new columns at
+            // their defaults and no record of the settings.
+            ctx.DashboardStatsCaches.Add(new DashboardStatsCache
+            {
+                Key = "admin",
+                TotalEmails = 999_999,
+                DefaultSeriesJson = null,
+                ComputedWithDirectionSplits = null,
+                ComputedWithSelectablePeriods = null
+            });
+            await ctx.SaveChangesAsync();
+
+            var dash = await ServiceFactory.CreateEmailCoreServiceNoCache(ctx).GetDashboardStatisticsAsync();
+
+            Assert.NotEqual(999_999, dash.TotalEmails);
+            Assert.Equal(await ctx.ArchivedEmails.CountAsync(), dash.TotalEmails);
+        }
+        finally
+        {
+            await DeleteAdminStatsRowAsync(ctx);
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ChartSeries_DefaultAdminSelectionComesFromTheRow_OtherSelectionsAreLive()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "in-1", "a@x.com", "b@x.com"));
+            await ctx.SaveChangesAsync();
+
+            var refresh = ServiceFactory.CreateDashboardStatsRefreshService(ctx, new DashboardOptions());
+            Assert.True(await refresh.RefreshAdminStatisticsAsync());
+
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "after-refresh", "a@x.com", "b@x.com"));
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreServiceNoCache(ctx);
+            var window = DashboardPeriods.DefaultWindow;
+
+            var stored = await svc.GetChartSeriesAsync(
+                null, DashboardPeriods.DefaultGranularity, window, outgoingSenders: false);
+            var live = await svc.GetChartSeriesAsync(
+                new List<int> { acct.Id }, DashboardPeriods.DefaultGranularity, window, outgoingSenders: false);
+
+            var row = await ctx.DashboardStatsCaches.AsNoTracking().SingleAsync(c => c.Key == "admin");
+            Assert.Equal(
+                row.DefaultSeries!.Emails.Sum(e => e.Count),
+                stored!.Emails.Sum(e => e.Count));
+
+            // The account's own scope is not stored, so it sees the mail archived after the
+            // refresh: both of its mails, while the stored admin series only has the first.
+            Assert.Equal(2, live!.Emails.Sum(e => e.Count));
+
+            // Same period and scope, other sender direction: not the stored selection, so it is
+            // counted live and is ahead of the stored one by exactly the mail added since.
+            var liveAdmin = await svc.GetChartSeriesAsync(
+                null, DashboardPeriods.DefaultGranularity, window, outgoingSenders: true);
+            Assert.Equal(
+                stored.Emails.Sum(e => e.Count) + 1,
+                liveAdmin!.Emails.Sum(e => e.Count));
+        }
+        finally
+        {
+            await DeleteAdminStatsRowAsync(ctx);
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    // ============================================================
     // ExportEmailsAsync (EML)
     // ============================================================
 

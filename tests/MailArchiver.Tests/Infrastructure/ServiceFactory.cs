@@ -115,6 +115,31 @@ internal static class ServiceFactory
         services.AddSingleton(sharedContext);
         return services.BuildServiceProvider();
     }
+
+    /// <summary>
+    /// Creates a DashboardStatsRefreshService whose scopes resolve the shared context and an
+    /// EmailCoreService built with the given dashboard settings, so a test can run one refresh
+    /// and then read the row it wrote.
+    /// </summary>
+    public static DashboardStatsRefreshService CreateDashboardStatsRefreshService(
+        MailArchiverDbContext sharedContext, Models.DashboardOptions dashboardOptions)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(sharedContext);
+        services.AddScoped(_ => new EmailCoreService(sharedContext,
+            NullLogger<EmailCoreService>.Instance,
+            new DateTimeHelper(Options.Create(new TimeZoneOptions { DisplayTimeZoneId = "Europe/Berlin" })),
+            Options.Create(new BatchOperationOptions()),
+            Options.Create(dashboardOptions),
+            memoryCache: null));
+        var provider = services.BuildServiceProvider();
+
+        return new DashboardStatsRefreshService(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<DashboardStatsRefreshService>.Instance,
+            Options.Create(dashboardOptions),
+            new ConfigurationBuilder().Build());
+    }
 }
 
 /// <summary>
