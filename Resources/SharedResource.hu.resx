@@ -2060,6 +2060,9 @@
   <data name="MaxSelectionsReached" xml:space="preserve">
     <value>Maximális kijelölés elérve ({0})</value>
   </data>
+  <data name="SelectAllMatching" xml:space="preserve">
+    <value>Mind a(z) {0} találat kijelölése</value>
+  </data>
   <data name="SelectAllOnPage" xml:space="preserve">
     <value>Összes kijelölése az oldalon</value>
   </data>
@@ -2357,6 +2360,12 @@
   <data name="OidcClaimLengthExceeded" xml:space="preserve">
     <value>Az igény értékei meghaladják a maximálisan engedélyezett hosszúságot</value>
   </data>
+  <data name="OidcMissingClaim" xml:space="preserve">
+    <value>Az identitásszolgáltató nem adott vissza egy kötelező állítást ({0}). Kérem forduljon a rendszergazdához.</value>
+  </data>
+  <data name="OidcLoginFailed" xml:space="preserve">
+    <value>A bejelentkezés egyszeri bejelentkezéssel nem sikerült. Kérem próbálja újra, vagy forduljon a rendszergazdához.</value>
+  </data>
   <data name="OidcInvalidEmailFormat" xml:space="preserve">
     <value>Érvénytelen e-mail formátumot kapott az azonosító szolgáltatótól</value>
   </data>
@@ -2644,6 +2653,15 @@
   </data>
   <data name="GotIt" xml:space="preserve">
     <value>Értettem!</value>
+  </data>
+  <data name="UpdateAvailableTitle" xml:space="preserve">
+    <value>Frissítés elérhető</value>
+  </data>
+  <data name="UpdateAvailableBody" xml:space="preserve">
+    <value>A(z) {0} verzió elérhető a GitHubon.</value>
+  </data>
+  <data name="ViewRelease" xml:space="preserve">
+    <value>Verzió megtekintése</value>
   </data>
 
   <!-- MSA (personal Microsoft account) OAuth2 device code flow -->
@@ -3530,5 +3548,119 @@
   </data>
   <data name="CurrentPeriod" xml:space="preserve">
     <value>Most</value>
+  </data>
+  <data name="MailcowInstances" xml:space="preserve"><value>Mailcow-példányok</value></data>
+  <data name="MailcowIntroduction" xml:space="preserve"><value>A kiválasztott Mailcow-postafiókokat személyes jelszavak nélkül archiválja.</value></data>
+  <data name="MailcowConnect" xml:space="preserve"><value>Mailcow csatlakoztatása</value></data>
+  <data name="MailcowManage" xml:space="preserve"><value>Postafiókok kezelése</value></data>
+  <data name="MailcowConnectHelp" xml:space="preserve"><value>Olyan API-kulcsot használjon, amely jogosult a postafiókok listázására és az alkalmazásjelszavak kezelésére. A hitelesítő adatok titkosításának engedélyezve kell lennie. Az IMAP ellenőrzött TLS-t használ.</value></data>
+  <data name="MailcowUrl" xml:space="preserve"><value>Mailcow URL</value></data>
+  <data name="MailcowApiKey" xml:space="preserve"><value>API-kulcs</value></data>
+  <data name="MailcowImapHost" xml:space="preserve"><value>IMAP-kiszolgáló</value></data>
+  <data name="MailcowImapPort" xml:space="preserve"><value>IMAP TLS-port</value></data>
+  <data name="MailcowSelectionHelp" xml:space="preserve"><value>Válasszon postafiókokat dedikált IMAP-alkalmazásjelszavak létrehozásához. A függőben lévő postafiókok újrapróbálhatók. A hozzáférés visszavonása leállítja a szinkronizálást, és megőrzi az archívumot.</value></data>
+  <data name="MailcowActivate" xml:space="preserve"><value>Kiválasztott postafiókok archiválása / újrapróbálás</value></data>
+  <data name="MailcowActive" xml:space="preserve"><value>Archiválás engedélyezve</value></data>
+  <data name="MailcowRevoked" xml:space="preserve"><value>Hozzáférés visszavonva</value></data>
+  <data name="MailcowPending" xml:space="preserve"><value>Függőben — újrapróbálás vagy visszavonás</value></data>
+  <data name="MailcowDisabled" xml:space="preserve"><value>Letiltva a Mailcowban</value></data>
+  <data name="MailcowExisting" xml:space="preserve"><value>Az archív fiók már létezik</value></data>
+  <data name="MailcowAvailable" xml:space="preserve"><value>Elérhető</value></data>
+  <data name="MailcowRevoke" xml:space="preserve"><value>Alkalmazásjelszó visszavonása</value></data>
+  <data name="MailcowRemainingAccess" xml:space="preserve"><value>Fennmaradó alkalmazásjelszavak</value></data>
+  <data name="MailcowImapHostInvalid" xml:space="preserve"><value>Adjon meg egy IMAP-kiszolgálónevet séma és port nélkül.</value></data>
+  <data name="MailcowInstanceAlreadyConnected" xml:space="preserve"><value>Ez a Mailcow-példány már csatlakoztatva van.</value></data>
+  <data name="MailcowInstanceSaveFailed" xml:space="preserve"><value>A példányt nem sikerült menteni. Ellenőrizze, hogy már csatlakoztatva van-e.</value></data>
+  <data name="MailcowSelectMailboxCount" xml:space="preserve"><value>Válasszon 1 és {0} közötti számú postafiókot.</value></data>
+  <data name="MailcowConcurrentChange" xml:space="preserve"><value>Egy egyidejű módosítás megakadályozta a kiépítést. Töltse újra a postafióklistát, és próbálja újra.</value></data>
+  <data name="MailcowImportResult" xml:space="preserve"><value>{0} postafiók kész; {1} nem aktiválható. A függőben lévő hozzáférés újrapróbálható vagy visszavonható.</value></data>
+  <data name="MailcowRevokedSuccess" xml:space="preserve"><value>Alkalmazásjelszó visszavonva. Az archívum megmarad, a szinkronizálás letiltva.</value></data>
+  <data name="MailcowEncryptionRequired" xml:space="preserve"><value>A Mailcow csatlakoztatása előtt engedélyezze a hitelesítő adatok titkosítását a Security__CredentialEncryptionKey beállítással.</value></data>
+  <data name="MailcowImapVerificationFailed" xml:space="preserve"><value>Az alkalmazásjelszót nem sikerült IMAP és TLS használatával ellenőrizni. Ellenőrizze az IMAP-kiszolgálót, a tanúsítványt és a postafiók állapotát, majd próbálja újra.</value></data>
+  <data name="MailcowMailboxUnavailable" xml:space="preserve"><value>Ez a postafiók nem érhető el, vagy le van tiltva a Mailcowban.</value></data>
+  <data name="MailcowRevokePreviousPassword" xml:space="preserve"><value>A törölt archív fiók újbóli hozzáadása előtt vonja vissza az előző alkalmazásjelszót.</value></data>
+  <data name="MailcowImapAccountExists" xml:space="preserve"><value>Ehhez a postafiókhoz már létezik IMAP-archívfiók.</value></data>
+  <data name="MailcowPasswordUndecryptable" xml:space="preserve"><value>A tárolt alkalmazásjelszó nem fejthető vissza. Állítsa helyre a titkosítási kulcsot, vagy vonja vissza ezt a hozzáférést.</value></data>
+  <data name="MailcowAppPasswordIdMissing" xml:space="preserve"><value>A Mailcow nem adott vissza alkalmazásjelszó-azonosítót. Próbálja újra a hozzáférés egyeztetéséhez.</value></data>
+  <data name="MailcowHttpsOriginRequired" xml:space="preserve"><value>Használja a Mailcow-példány HTTPS-originjét, például https://mail.example.com.</value></data>
+  <data name="MailcowApiKeyUnavailable" xml:space="preserve"><value>Az API-kulcs nem érhető el. Ellenőrizze a beállított hitelesítőadat-titkosítási kulcsot.</value></data>
+  <data name="MailcowApiRequestFailed" xml:space="preserve"><value>A Mailcow API-kérés sikertelen (HTTP {0}). Ellenőrizze az API-jogosultságokat és az engedélyezett forrás-IP-címeket.</value></data>
+  <data name="MailcowApiRejected" xml:space="preserve"><value>A Mailcow elutasította az API-kérést. Ellenőrizze a példány konfigurációját és az API-jogosultságokat.</value></data>
+  <data name="MailcowApiNotConfirmed" xml:space="preserve"><value>A Mailcow nem erősítette meg a módosítást.</value></data>
+  <data name="MailcowApiUnreachable" xml:space="preserve"><value>A Mailcow nem érhető el, vagy érvénytelen választ adott. Próbálja újra a távoli állapot egyeztetéséhez.</value></data>
+  <data name="MailcowNoInstances" xml:space="preserve"><value>Még nincs csatlakoztatott Mailcow-példány.</value></data>
+  <data name="MailcowEditInstance" xml:space="preserve"><value>Mailcow-példány szerkesztése</value></data>
+  <data name="MailcowEditHelp" xml:space="preserve"><value>A URL vagy API-kulcs módosításakor a kapcsolat mentés előtt ellenőrzésre kerül a Mailcownál.</value></data>
+  <data name="MailcowApiKeyUnchanged" xml:space="preserve"><value>Hagyja üresen az aktuális kulcs megtartásához</value></data>
+  <data name="MailcowApiKeyKeepHelp" xml:space="preserve"><value>A tárolt API-kulcs soha nem jelenik meg. Új kulcsot csak a lecseréléshez adjon meg.</value></data>
+  <data name="MailcowDeleteInstance" xml:space="preserve"><value>Mailcow-példány törlése</value></data>
+  <data name="MailcowDeleteHelp" xml:space="preserve"><value>A példány törlésével eltávolítja az API-kulcsot és a postaláda-hozzárendeléseket. Az archiválási fiókok és a bennük lévő levelek megmaradnak.</value></data>
+  <data name="MailcowDeleteConfirm" xml:space="preserve"><value>Példány törlése</value></data>
+  <data name="MailcowDeleteBlockedHelp" xml:space="preserve"><value>A Mailcow-ban még aktív alkalmazásjelszavak vannak. Először vonja vissza ezeket a postaláda oldalon — a példány törlése eltávolítaná a visszavonáshoz szükséges API-kulcsot.</value></data>
+  <data name="MailcowMailboxes" xml:space="preserve"><value>Postaládák</value></data>
+  <data name="MailcowInstanceUpdated" xml:space="preserve"><value>Mailcow-példány frissítve.</value></data>
+  <data name="MailcowInstanceDeleted" xml:space="preserve"><value>Mailcow-példány törölve. Az archiválási fiókok megmaradtak.</value></data>
+  <data name="MailcowInstanceNotFound" xml:space="preserve"><value>A Mailcow-példány már nem létezik.</value></data>
+  <data name="MailcowDeleteRequiresRevoke" xml:space="preserve"><value>A példány törlése előtt vonja vissza az összes kezelt alkalmazásjelszót.</value></data>
+  <data name="MailcowProviderLabel" xml:space="preserve"><value>Mailcow</value></data>
+  <data name="MailcowProviderHelp" xml:space="preserve"><value>Fiókok létrehozása és kezelése csatlakoztatott Mailcow-példányon keresztül.</value></data>
+  <data name="MailcowSelectInstance" xml:space="preserve"><value>Mailcow-példány</value></data>
+  <data name="MailcowManageInstances" xml:space="preserve"><value>Mailcow-példányok kezelése</value></data>
+  <data name="MailcowManageMailboxes" xml:space="preserve"><value>Postafiókok kezelése</value></data>
+  <data name="MailcowNoInstancesConnected" xml:space="preserve"><value>Még nincs csatlakoztatva Mailcow-példány.</value></data>
+  <data name="MailcowLinkAccountHelp" xml:space="preserve"><value>Kapcsolja ezt az IMAP-fiókot egy Mailcow-példányhoz. A jelenlegi jelszót egy dedikált alkalmazásjelszó váltja fel.</value></data>
+  <data name="MailcowLinkedToInstance" xml:space="preserve"><value>A(z) {0} Mailcow-példány kezeli</value></data>
+  <data name="MailcowUnlinkHint" xml:space="preserve"><value>Válasszon másik szolgáltatót, és mentse el a Mailcow alkalmazásjelszó visszavonásához.</value></data>
+  <data name="MailcowAccountNotFound" xml:space="preserve"><value>Az archív fiók nem található.</value></data>
+  <data name="MailcowOnlyImapAccounts" xml:space="preserve"><value>Csak IMAP-fiókok kapcsolhatók a Mailcowhoz.</value></data>
+  <data name="MailcowMailboxAlreadyLinked" xml:space="preserve"><value>Ez a postafiók már egy másik archív fiókhoz van kapcsolva.</value></data>
+  <data name="MailcowAccountAlreadyLinked" xml:space="preserve"><value>Ez a fiók már egy másik Mailcow-példányhoz van kapcsolva.</value></data>
+  <data name="MailcowNewImapPasswordRequired" xml:space="preserve"><value>A Mailcow elhagyása után adjon meg új IMAP-jelszót.</value></data>
+  <data name="MailcowLinkSuccess" xml:space="preserve"><value>A fiók a(z) {0} Mailcow-példányhoz kapcsolva.</value></data>
+  <data name="MailcowDetachSuccess" xml:space="preserve"><value>A Mailcow-hozzáférés visszavonva. Adjon meg új hitelesítő adatokat a kiválasztott szolgáltatóhoz.</value></data>
+  <data name="DeleteAllMatches" xml:space="preserve">
+    <value>Minden találat törlése</value>
+  </data>
+  <data name="DeleteAllMatchesTitle" xml:space="preserve">
+    <value>Minden egyező e-mail törlése</value>
+  </data>
+  <data name="DeleteAllMatchesWarning" xml:space="preserve">
+    <value>Ez véglegesen töröl {0} e-mailt, amely megfelel a jelenlegi szűrőnek. Nem vonható vissza; minden törlés naplózásra kerül.</value>
+  </data>
+  <data name="DeleteAllMatchesLockedInfo" xml:space="preserve">
+    <value>{0} egyező e-mailt a megőrzési szabályzat zárol, ezért megmarad.</value>
+  </data>
+  <data name="DeleteAllMatchesConfirmLabel" xml:space="preserve">
+    <value>A megerősítéshez írja be az e-mailek számát</value>
+  </data>
+  <data name="DeleteAllMatchesCountChanged" xml:space="preserve">
+    <value>Az eredményhalmaz megváltozott (megerősítve: {0}, jelenleg: {1}). Ellenőrizze a szűrőt, és erősítse meg újra.</value>
+  </data>
+  <data name="DeleteAllMatchesNoMatches" xml:space="preserve">
+    <value>Egyetlen törölhető e-mail sem felel meg ennek a szűrőnek.</value>
+  </data>
+  <data name="DeleteAllMatchesNoMatchesLocked" xml:space="preserve">
+    <value>Egyetlen törölhető e-mail sem felel meg ennek a szűrőnek; {0} egyező e-mailt a megőrzési szabályzat zárol.</value>
+  </data>
+  <data name="DeleteAllMatchesFilterRequired" xml:space="preserve">
+    <value>Először szűkítse az eredményhalmazt (keresőkifejezés, dátum, mappa vagy fiók).</value>
+  </data>
+  <data name="DeleteAllMatchesCapExceeded" xml:space="preserve">
+    <value>{0} találat meghaladja a beállított maximumot ({1}). Szűkítse a szűrőt.</value>
+  </data>
+  <data name="DeleteAllMatchesQueued" xml:space="preserve">
+    <value>Törlési feladat elindítva {0} e-mailhez. Feladatazonosító: {1}</value>
+  </data>
+  <data name="DeleteAllMatchesPreviewFailed" xml:space="preserve">
+    <value>Nem sikerült meghatározni az egyező e-mailek számát. Próbálja újra.</value>
+  </data>
+  <data name="SkippedLockedEmails" xml:space="preserve">
+    <value>Kihagyva (zárolva)</value>
+  </data>
+  <data name="FilterJob" xml:space="preserve">
+    <value>Szűrő</value>
+  </data>
+  <data name="PasswordLoginDisabledError" xml:space="preserve">
+    <value>A jelszavas bejelentkezés le van tiltva. Kérjük, jelentkezzen be az identitásszolgáltatóján keresztül.</value>
   </data>
 </root>

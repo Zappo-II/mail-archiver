@@ -1,5 +1,6 @@
 ﻿using MailArchiver.Auth.Exceptions;
 using MailArchiver.Auth.Handlers;
+using MailArchiver.Auth.Helpers;
 using MailArchiver.Auth.Options;
 using MailArchiver.Models;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -46,6 +47,36 @@ namespace MailArchiver.Auth.Extensions
                 options.Cookie.SameSite = cookieSameSiteMode;
                 options.ExpireTimeSpan = TimeSpan.FromMinutes(authOptionsConfig.SessionTimeoutMinutes);
                 options.SlidingExpiration = true;
+
+                // Cookie authentication is self-contained by default: the ticket stays
+                // valid until it expires, no matter what happens to the user row. Validate
+                // it against the stored security stamp so a password change, password
+                // reset, deactivation, role change or deletion ends existing sessions.
+                options.Events = new CookieAuthenticationEvents
+                {
+                    OnValidatePrincipal = async context =>
+                    {
+                        var dbContext = context.HttpContext.RequestServices
+                            .GetRequiredService<MailArchiver.Data.MailArchiverDbContext>();
+
+                        if (await MailArchiver.Auth.Services.SecurityStampValidator
+                                .IsSessionValidAsync(context.Principal, dbContext))
+                        {
+                            return;
+                        }
+
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("MailArchiver.Auth.SecurityStamp");
+                        logger.LogInformation(
+                            "Rejected auth cookie for user {Username}: security stamp changed, account inactive or deleted",
+                            context.Principal?.Identity?.Name);
+
+                        context.RejectPrincipal();
+                        await Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions
+                            .SignOutAsync(context.HttpContext, CookieAuthenticationDefaults.AuthenticationScheme);
+                    }
+                };
             });
 
             // Read-only REST API: bearer API-key scheme (validated by the /api/
@@ -75,6 +106,14 @@ namespace MailArchiver.Auth.Extensions
                     o.RequireHttpsMetadata = true; // Require HTTPS for security
                     o.SaveTokens = false; // Don't save tokens in cookies for security
                     o.UsePkce = true; // Use PKCE for additional security
+
+                    // Providers such as the Synology SSO Server do not support the
+                    // framework default 'form_post' and do not advertise their supported
+                    // response modes in the discovery document. Allow overriding it.
+                    if (!string.IsNullOrWhiteSpace(oauthOptions.ResponseMode))
+                    {
+                        o.ResponseMode = oauthOptions.ResponseMode;
+                    }
                     
                     // SECURITY: Proper token validation parameters
                     o.TokenValidationParameters = new TokenValidationParameters
@@ -118,34 +157,19 @@ namespace MailArchiver.Auth.Extensions
                         return Task.CompletedTask;
                     };
 
+                    // Any failure inside the OIDC pipeline (unusable claims, token
+                    // validation, user provisioning) ends up here. Without this handler
+                    // the exception escapes and the user is served an HTTP 500.
+                    o.Events.OnRemoteFailure = OidcRemoteFailureHandler.HandleAsync;
+
                     o.Events.OnUserInformationReceived = async (UserInformationReceivedContext ctx) => {
                         var handler = ctx.Request.HttpContext.RequestServices.GetRequiredService<AuthenticationHandler>();
                         var logger = ctx.Request.HttpContext.RequestServices.GetRequiredService<ILogger<AuthenticationHandler>>();
 
                         // SECURITY: Safely extract claims with fallback from UserInfo and JWT
-                        string? id = null;
-                        string? name = null;
-                        string? email = null;
-
-                        // Extract sub (required)
-                        if (ctx.User.RootElement.TryGetProperty("sub", out var subElement))
-                            id = subElement.GetString();
-                        
-                        // Extract name with multiple fallbacks
-                        if (ctx.User.RootElement.TryGetProperty("name", out var nameElement))
-                            name = nameElement.GetString();
-                        else if (ctx.User.RootElement.TryGetProperty("preferred_username", out var usernameElement))
-                            name = usernameElement.GetString();
-                        else if (ctx.User.RootElement.TryGetProperty("given_name", out var givenNameElement))
-                            name = givenNameElement.GetString();
-                        
-                        // Extract email with multiple fallbacks from UserInfo
-                        if (ctx.User.RootElement.TryGetProperty("email", out var emailElement))
-                            email = emailElement.GetString();
-                        else if (ctx.User.RootElement.TryGetProperty("mail", out var mailElement))
-                            email = mailElement.GetString();
-                        else if (ctx.User.RootElement.TryGetProperty("upn", out var upnElement))
-                            email = upnElement.GetString();
+                        var id = OidcClaimExtractor.ExtractSubject(ctx.User.RootElement);
+                        var name = OidcClaimExtractor.ExtractName(ctx.User.RootElement);
+                        var email = OidcClaimExtractor.ExtractEmail(ctx.User.RootElement);
                         
                         // If email not in UserInfo, try to get from JWT token claims
                         if (string.IsNullOrWhiteSpace(email))
@@ -166,13 +190,15 @@ namespace MailArchiver.Auth.Extensions
                         }
                         if(string.IsNullOrWhiteSpace(name))
                         {
-                            logger.LogError("Missing 'name' or 'preferred_username' claim in OIDC user info");
-                            throw new MissingClaimException("name or preferred_username");
+                            var accepted = string.Join(", ", OidcClaimExtractor.NameClaims);
+                            logger.LogError("Missing name claim in OIDC user info (accepted: {Claims})", accepted);
+                            throw new MissingClaimException(accepted);
                         }
                         if(string.IsNullOrWhiteSpace(email))
                         {
-                            logger.LogError("Missing 'email' claim in OIDC user info");
-                            throw new MissingClaimException("email");
+                            var accepted = string.Join(", ", OidcClaimExtractor.EmailClaims);
+                            logger.LogError("Missing email claim in OIDC user info (accepted: {Claims})", accepted);
+                            throw new MissingClaimException(accepted);
                         }
 
                         // SECURITY: Validate email format
@@ -180,8 +206,7 @@ namespace MailArchiver.Auth.Extensions
                         if (!emailRegex.IsMatch(email))
                         {
                             logger.LogWarning("Invalid email format from OIDC provider: {Email}", email);
-                            var localizer = ctx.Request.HttpContext.RequestServices.GetRequiredService<IStringLocalizer<SharedResource>>();
-                            throw new InvalidOperationException(localizer["OidcInvalidEmailFormat"]);
+                            throw new OidcAuthenticationException("OidcInvalidEmailFormat");
                         }
 
                         // SECURITY: Validate claim lengths to prevent abuse
@@ -189,8 +214,7 @@ namespace MailArchiver.Auth.Extensions
                         {
                             logger.LogWarning("OIDC claim exceeds maximum length: sub={SubLen}, name={NameLen}, email={EmailLen}", 
                                 id.Length, name.Length, email.Length);
-                            var localizer = ctx.Request.HttpContext.RequestServices.GetRequiredService<IStringLocalizer<SharedResource>>();
-                            throw new InvalidOperationException(localizer["OidcClaimLengthExceeded"]);
+                            throw new OidcAuthenticationException("OidcClaimLengthExceeded");
                         }
 
                         // SECURITY: Sanitize name to prevent XSS (remove HTML tags and dangerous characters)

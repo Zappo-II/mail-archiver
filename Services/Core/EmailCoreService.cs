@@ -26,6 +26,8 @@ namespace MailArchiver.Services.Core
         private readonly BatchOperationOptions _batchOptions;
         private readonly DashboardOptions _dashboardOptions;
         private readonly IMemoryCache _memoryCache;
+        private readonly RawMessageOptions _rawMessageOptions;
+        private readonly IRawMessageStore? _rawMessageStore;
 
         public EmailCoreService(
             MailArchiverDbContext context,
@@ -33,7 +35,9 @@ namespace MailArchiver.Services.Core
             DateTimeHelper dateTimeHelper,
             IOptions<BatchOperationOptions> batchOptions,
             IOptions<DashboardOptions>? dashboardOptions = null,
-            IMemoryCache? memoryCache = null)
+            IMemoryCache? memoryCache = null,
+            IOptions<RawMessageOptions>? rawMessageOptions = null,
+            IRawMessageStore? rawMessageStore = null)
         {
             _context = context;
             _logger = logger;
@@ -41,7 +45,25 @@ namespace MailArchiver.Services.Core
             _batchOptions = batchOptions.Value;
             _dashboardOptions = dashboardOptions?.Value ?? new DashboardOptions();
             _memoryCache = memoryCache ?? new MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+            _rawMessageOptions = rawMessageOptions?.Value ?? new RawMessageOptions();
+
+            // Tests and the CLI construct this service without a store; fall back to the
+            // Postgres backend, which is what the archive did before storage was pluggable.
+            _rawMessageStore = rawMessageStore ?? new PostgresRawMessageStore(
+                context, Options.Create(_rawMessageOptions));
         }
+
+        /// <summary>Whether callers should capture the original message bytes for ArchiveEmailAsync.</summary>
+        public bool StoresRawMessages => _rawMessageOptions.Enabled;
+
+        /// <summary>
+        /// Counts the emails matching a deletion filter. Used by the deletion preview
+        /// and by the filter-based deletion job; the query shares its WHERE clause
+        /// with <see cref="SearchEmailsAsync"/>.
+        /// </summary>
+        public Task<(int Deletable, int Locked, int? MaxId)> CountEmailsForDeletionAsync(
+            EmailDeletionFilter filter, CancellationToken cancellationToken = default)
+            => EmailFilterQuery.CountAsync(_context, filter, cancellationToken);
 
         #region Search Methods
 
@@ -83,6 +105,79 @@ namespace MailArchiver.Services.Core
             }
         }
 
+        /// <summary>
+        /// Returns the IDs of all emails matching the same filters as <see cref="SearchEmailsAsync"/>,
+        /// in the same sort order, capped at <paramref name="limit"/>. Backs "select all matching"
+        /// in the email list, so a selection is not limited to the visible page. TotalCount is the
+        /// number of all matches, also when there are more than <paramref name="limit"/>.
+        /// </summary>
+        public async Task<(List<int> Ids, int TotalCount)> SearchEmailIdsAsync(
+            string searchTerm,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int? accountId,
+            string folderName,
+            bool? isOutgoing,
+            int limit,
+            List<int> allowedAccountIds = null,
+            string sortBy = "SentDate",
+            string sortOrder = "desc")
+        {
+            if (limit < 0) limit = 0;
+            sortBy = CanonicalizeSortBy(sortBy);
+            sortOrder = CanonicalizeSortOrder(sortOrder);
+
+            var clause = EmailFilterSql.Build(
+                searchTerm, fromDate, toDate, accountId, folderName, isOutgoing, allowedAccountIds);
+            if (clause.MatchesNothing)
+            {
+                _logger.LogWarning("{Reason}", clause.NoMatchReason);
+                return (new List<int>(), 0);
+            }
+
+            var whereClause = clause.WhereClause;
+            var parameters = clause.Parameters;
+            var paramCounter = clause.NextParamIndex;
+
+            var countSql = $@"
+                SELECT COUNT(*)
+                FROM mail_archiver.""ArchivedEmails""
+                {whereClause}";
+            var totalCount = await ExecuteScalarQueryAsync<int>(countSql, CloneParameters(parameters));
+
+            // Same MATERIALIZED CTE as the page query, so the full-text index is used and no
+            // bodies are read. Sorting by Id as well keeps the order stable for equal dates.
+            var (_, sortColumn, _) = GetOrderByClause(sortBy, sortOrder);
+            var direction = sortOrder == "asc" ? "ASC" : "DESC";
+            var limitPlaceholder = $"@param{paramCounter}";
+            var idSql = $@"
+                WITH ""matched"" AS MATERIALIZED (
+                    SELECT e.""Id"", e.""{sortColumn}""
+                    FROM mail_archiver.""ArchivedEmails"" e
+                    {whereClause}
+                )
+                SELECT m.""Id""
+                FROM ""matched"" m
+                ORDER BY m.""{sortColumn}"" {direction}, m.""Id"" {direction}
+                LIMIT {limitPlaceholder}";
+
+            var idParameters = CloneParameters(parameters);
+            idParameters.Add(new Npgsql.NpgsqlParameter(limitPlaceholder, limit));
+
+            var ids = new List<int>();
+            using var connection = new Npgsql.NpgsqlConnection(_context.Database.GetConnectionString());
+            await connection.OpenAsync();
+            using var command = new Npgsql.NpgsqlCommand(idSql, connection);
+            command.Parameters.AddRange(idParameters.ToArray());
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                ids.Add(reader.GetInt32(0));
+            }
+
+            return (ids, totalCount);
+        }
+
         private async Task<(List<ArchivedEmail> Emails, int TotalCount)> SearchEmailsOptimizedAsync(
             string searchTerm,
             DateTime? fromDate,
@@ -97,193 +192,17 @@ namespace MailArchiver.Services.Core
             string sortOrder = "desc")
         {
             var startTime = DateTime.UtcNow;
-            var whereConditions = new List<string>();
-            var parameters = new List<Npgsql.NpgsqlParameter>();
-            var paramCounter = 0;
-
-            // Full-text search condition
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            var clause = EmailFilterSql.Build(
+                searchTerm, fromDate, toDate, accountId, folderName, isOutgoing, allowedAccountIds);
+            if (clause.MatchesNothing)
             {
-                var (tsQuery, phrases, fieldSearches, fieldPhrases) = ParseSearchTermForTsQuery(searchTerm);
-                var searchConditions = new List<string>();
-
-                if (!string.IsNullOrEmpty(tsQuery))
-                {
-                    searchConditions.Add($@"
-                        to_tsvector('simple', 
-                            COALESCE(""Subject"", '') || ' ' || 
-                            COALESCE(""Body"", '') || ' ' || 
-                            COALESCE(""From"", '') || ' ' || 
-                            COALESCE(""To"", '') || ' ' || 
-                            COALESCE(""Cc"", '') || ' ' || 
-                            COALESCE(""Bcc"", '')) 
-                        @@ to_tsquery('simple', @param{paramCounter})");
-                    parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", tsQuery));
-                    paramCounter++;
-                }
-
-                foreach (var phrase in phrases)
-                {
-                    var phraseTsQuery = BuildPhraseTsQuery(phrase);
-                    if (!string.IsNullOrEmpty(phraseTsQuery))
-                    {
-                        searchConditions.Add($@"(
-                        to_tsvector('simple', 
-                            COALESCE(""Subject"", '') || ' ' || 
-                            COALESCE(""Body"", '') || ' ' || 
-                            COALESCE(""From"", '') || ' ' || 
-                            COALESCE(""To"", '') || ' ' || 
-                            COALESCE(""Cc"", '') || ' ' || 
-                            COALESCE(""Bcc"", '')) 
-                        @@ to_tsquery('simple', @param{paramCounter})
-                        AND (
-                        POSITION(LOWER(@param{paramCounter + 1}) IN LOWER(COALESCE(""Subject"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter + 1}) IN LOWER(COALESCE(""Body"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter + 1}) IN LOWER(COALESCE(""From"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter + 1}) IN LOWER(COALESCE(""To"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter + 1}) IN LOWER(COALESCE(""Cc"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter + 1}) IN LOWER(COALESCE(""Bcc"", ''))) > 0
-                    ))");
-                        parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", phraseTsQuery));
-                        paramCounter++;
-                        parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", phrase));
-                        paramCounter++;
-                    }
-                    else
-                    {
-                        searchConditions.Add($@"(
-                        POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""Subject"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""Body"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""From"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""To"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""Cc"", ''))) > 0 OR
-                        POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""Bcc"", ''))) > 0
-                    )");
-                        parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", phrase));
-                        paramCounter++;
-                    }
-                }
-
-                foreach (var fieldSearch in fieldSearches)
-                {
-                    var field = fieldSearch.Key;
-                    var terms = fieldSearch.Value;
-                    var columnName = GetColumnNameForField(field);
-
-                    if (!string.IsNullOrEmpty(columnName))
-                    {
-                        foreach (var term in terms)
-                        {
-                            searchConditions.Add($@"
-                                POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""{columnName}"", ''))) > 0");
-                            parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", term));
-                            paramCounter++;
-                        }
-                    }
-                }
-
-                foreach (var fieldPhrase in fieldPhrases)
-                {
-                    var field = fieldPhrase.Key;
-                    var currentFieldPhrases = fieldPhrase.Value;
-                    var columnName = GetColumnNameForField(field);
-
-                    if (!string.IsNullOrEmpty(columnName))
-                    {
-                        foreach (var phrase in currentFieldPhrases)
-                        {
-                            searchConditions.Add($@"
-                                POSITION(LOWER(@param{paramCounter}) IN LOWER(COALESCE(""{columnName}"", ''))) > 0");
-                            parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", phrase));
-                            paramCounter++;
-                        }
-                    }
-                }
-
-                if (searchConditions.Any())
-                {
-                    whereConditions.Add($"({string.Join(" AND ", searchConditions)})");
-                }
+                _logger.LogWarning("{Reason}", clause.NoMatchReason);
+                return (new List<ArchivedEmail>(), 0);
             }
 
-            // Account filtering
-            if (accountId.HasValue)
-            {
-                if (allowedAccountIds != null && !allowedAccountIds.Contains(accountId.Value))
-                {
-                    _logger.LogWarning("User attempted to access account {AccountId} which is not in their allowed accounts list", accountId.Value);
-                    return (new List<ArchivedEmail>(), 0);
-                }
-
-                whereConditions.Add($@"""MailAccountId"" = @param{paramCounter}");
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", accountId.Value));
-                paramCounter++;
-            }
-            else if (allowedAccountIds != null)
-            {
-                if (allowedAccountIds.Any())
-                {
-                    whereConditions.Add($@"""MailAccountId"" = ANY(@param{paramCounter})");
-                    parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", allowedAccountIds.ToArray()));
-                    paramCounter++;
-                }
-                else
-                {
-                    _logger.LogWarning("User has no allowed accounts, returning empty result set");
-                    return (new List<ArchivedEmail>(), 0);
-                }
-            }
-
-            // Date filtering
-            if (fromDate.HasValue)
-            {
-                whereConditions.Add($@"""SentDate"" >= @param{paramCounter}");
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", fromDate.Value));
-                paramCounter++;
-            }
-
-            if (toDate.HasValue)
-            {
-                var endDate = toDate.Value.AddDays(1).AddSeconds(-1);
-                whereConditions.Add($@"""SentDate"" <= @param{paramCounter}");
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", endDate));
-                paramCounter++;
-            }
-
-            if (isOutgoing.HasValue)
-            {
-                whereConditions.Add($@"""IsOutgoing"" = @param{paramCounter}");
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", isOutgoing.Value));
-                paramCounter++;
-            }
-
-            // Folder filtering: selecting a folder also shows the emails of all descendant
-            // folders (path-boundary prefix match). Intermediate folders rendered in the
-            // folder tree can hold no emails themselves; an exact-only match would return
-            // an empty result for such parents. Kept in sync with SearchEmailsEFAsync.
-            if (!string.IsNullOrEmpty(folderName))
-            {
-                var exactParam = paramCounter;
-                var slashParam = paramCounter + 1;
-                var backslashParam = paramCounter + 2;
-                var dotParam = paramCounter + 3;
-                paramCounter += 4;
-
-                // Escape LIKE special chars (\ % _) in the literal part, then append the
-                // wildcard LAST so it isn't escaped. The separator must be escaped too:
-                // a backslash separator is itself the default LIKE escape character, so an
-                // unescaped "…\%" would read as literal '%' instead of "prefix + anything".
-                const string esc = "\\";
-                string Esc(string s) => s.Replace(esc, esc + esc).Replace("%", esc + "%").Replace("_", esc + "_");
-
-                whereConditions.Add($@"(""FolderName"" = @param{exactParam} OR ""FolderName"" LIKE @param{slashParam} ESCAPE '{esc}' OR ""FolderName"" LIKE @param{backslashParam} ESCAPE '{esc}' OR ""FolderName"" LIKE @param{dotParam} ESCAPE '{esc}')");
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{exactParam}", folderName));
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{slashParam}",     Esc(folderName + "/")  + "%"));
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{backslashParam}", Esc(folderName + "\\") + "%"));
-                parameters.Add(new Npgsql.NpgsqlParameter($"@param{dotParam}",       Esc(folderName + ".")  + "%"));
-            }
-
-            var whereClause = whereConditions.Any() ? "WHERE " + string.Join(" AND ", whereConditions) : "";
+            var whereClause = clause.WhereClause;
+            var parameters = clause.Parameters;
+            var paramCounter = clause.NextParamIndex;
 
             // Count query
             var countSql = $@"
@@ -295,6 +214,7 @@ namespace MailArchiver.Services.Core
 
             // Build ORDER BY clause
             var (orderByClause, sortColumn, isTimestampSort) = GetOrderByClause(sortBy, sortOrder);
+            var direction = sortOrder == "asc" ? "ASC" : "DESC";
 
             // Parametrize LIMIT/OFFSET rather than interpolating integers, so
             // the data query inherits the same SQL-injection defense as the
@@ -322,7 +242,7 @@ namespace MailArchiver.Services.Core
                     ""page"" AS (
                         SELECT m.""Id"", m.""{sortColumn}""
                         FROM ""matched"" m
-                        ORDER BY m.""{sortColumn}"" {(sortOrder?.ToLower() == "asc" ? "ASC" : "DESC")}
+                        ORDER BY m.""{sortColumn}"" {direction}, m.""Id"" {direction}
                         LIMIT {limitPlaceholder} OFFSET {offsetPlaceholder}
                     )
                     SELECT e.""Id"", e.""MailAccountId"", e.""MessageId"", e.""Subject"", e.""Body"", e.""HtmlBody"",
@@ -332,7 +252,7 @@ namespace MailArchiver.Services.Core
                     FROM ""page"" p
                     INNER JOIN mail_archiver.""ArchivedEmails"" e ON e.""Id"" = p.""Id""
                     INNER JOIN mail_archiver.""MailAccounts"" ma ON e.""MailAccountId"" = ma.""Id""
-                    ORDER BY p.""{sortColumn}"" {(sortOrder?.ToLower() == "asc" ? "ASC" : "DESC")}";
+                    ORDER BY p.""{sortColumn}"" {direction}, p.""Id"" {direction}";
             }
             else
             {
@@ -418,125 +338,6 @@ namespace MailArchiver.Services.Core
             return emails;
         }
 
-        private (string tsQuery, List<string> phrases, Dictionary<string, List<string>> fieldSearches, Dictionary<string, List<string>> fieldPhrases) ParseSearchTermForTsQuery(string searchTerm)
-        {
-            if (string.IsNullOrWhiteSpace(searchTerm))
-                return (null, new List<string>(), new Dictionary<string, List<string>>(), new Dictionary<string, List<string>>());
-
-            var phrases = new List<string>();
-            var individualWords = new List<string>();
-            var fieldSearches = new Dictionary<string, List<string>>();
-            var fieldPhrases = new Dictionary<string, List<string>>();
-            var validFields = new HashSet<string> { "subject", "body", "from", "to" };
-
-            var regex = new Regex(@"""([^""]*)""|(\w+):(""([^""]*)""|(\S+))|(\S+)", RegexOptions.None);
-            var matches = regex.Matches(searchTerm);
-
-            foreach (Match match in matches)
-            {
-                if (match.Groups[1].Success)
-                {
-                    var phrase = match.Groups[1].Value.Trim();
-                    if (!string.IsNullOrEmpty(phrase))
-                        phrases.Add(phrase);
-                }
-                else if (match.Groups[2].Success)
-                {
-                    var field = match.Groups[2].Value.ToLower().Trim();
-                    if (validFields.Contains(field))
-                    {
-                        if (match.Groups[4].Success)
-                        {
-                            var fieldPhrase = match.Groups[4].Value.Trim();
-                            if (!string.IsNullOrEmpty(fieldPhrase))
-                            {
-                                if (!fieldPhrases.ContainsKey(field))
-                                    fieldPhrases[field] = new List<string>();
-                                fieldPhrases[field].Add(fieldPhrase);
-                            }
-                        }
-                        else if (match.Groups[5].Success)
-                        {
-                            var fieldTerm = match.Groups[5].Value.Trim();
-                            if (!string.IsNullOrEmpty(fieldTerm))
-                            {
-                                var sanitized = Regex.Replace(fieldTerm, @"[&|!():\*]", "", RegexOptions.None);
-                                if (!string.IsNullOrEmpty(sanitized))
-                                {
-                                    if (!fieldSearches.ContainsKey(field))
-                                        fieldSearches[field] = new List<string>();
-                                    fieldSearches[field].Add(sanitized);
-                                }
-                            }
-                        }
-                    }
-                }
-                else if (match.Groups[6].Success)
-                {
-                    var word = match.Groups[6].Value.Trim();
-                    if (!string.IsNullOrEmpty(word))
-                    {
-                        var sanitized = Regex.Replace(word, @"[&|!():\*]", "", RegexOptions.None);
-                        if (!string.IsNullOrEmpty(sanitized))
-                            individualWords.Add(sanitized);
-                    }
-                }
-            }
-
-            string tsQuery = null;
-            if (individualWords.Any())
-            {
-                // Use prefix matching (:*) for each term to enable partial word matching
-                // This allows "isenb" to match "isenboeck", "isenböck", etc.
-                // The GIN index supports prefix matching efficiently
-                var escapedTerms = individualWords.Select(t => t.Replace("'", "''") + ":*");
-                tsQuery = string.Join(" & ", escapedTerms);
-            }
-
-            return (tsQuery, phrases, fieldSearches, fieldPhrases);
-        }
-
-        private string GetColumnNameForField(string fieldName)
-        {
-            return fieldName.ToLower() switch
-            {
-                "subject" => "Subject",
-                "body" => "Body",
-                "from" => "From",
-                "to" => "To",
-                _ => null
-            };
-        }
-
-        /// <summary>
-        /// Builds a GIN-indexable tsquery for an exact phrase or single term, using prefix
-        /// matching (:*) and adjacency (<->) between words. Returns null when the input
-        /// contains no usable tokens (only punctuation), in which case the caller should
-        /// fall back to POSITION-only matching.
-        /// Used as a selective pre-filter before the authoritative POSITION substring check,
-        /// so the GIN index narrows the candidate set and the body is not detoasted during
-        /// matching for the common case.
-        /// </summary>
-        private string BuildPhraseTsQuery(string phrase)
-        {
-            if (string.IsNullOrWhiteSpace(phrase))
-                return null;
-
-            var words = phrase.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
-            var escapedTerms = new List<string>(words.Length);
-            foreach (var word in words)
-            {
-                var sanitized = Regex.Replace(word, @"[&|!():\*]", "", RegexOptions.None);
-                if (!string.IsNullOrEmpty(sanitized))
-                    escapedTerms.Add(sanitized.Replace("'", "''") + ":*");
-            }
-
-            if (escapedTerms.Count == 0)
-                return null;
-
-            return string.Join(" <-> ", escapedTerms);
-        }
-
         private (string OrderByClause, string SortColumn, bool IsTimestampSort) GetOrderByClause(string sortBy, string sortOrder)
         {
             // sortBy is already canonicalized by SearchEmailsAsync; the switch
@@ -552,7 +353,11 @@ namespace MailArchiver.Services.Core
             };
 
             var direction = sortOrder == "asc" ? "ASC" : "DESC";
-            return ($@"ORDER BY e.""{columnName}"" {direction}", columnName, isTimestampSort);
+            // Id is the tiebreak in both the page query and the ID query for
+            // "select all matching", so a selection always covers the rows the
+            // user actually sees first when the sort column has duplicates
+            // (common for Subject/From/To and for same-day SentDate values).
+            return ($@"ORDER BY e.""{columnName}"" {direction}, e.""Id"" {direction}", columnName, isTimestampSort);
         }
 
         /// <summary>
@@ -640,7 +445,7 @@ namespace MailArchiver.Services.Core
             IQueryable<ArchivedEmail> searchQuery = baseQuery;
             if (!string.IsNullOrEmpty(searchTerm))
             {
-                var (tsQuery, phrases, fieldSearches, fieldPhrases) = ParseSearchTermForTsQuery(searchTerm);
+                var (tsQuery, phrases, fieldSearches, fieldPhrases) = EmailFilterSql.ParseSearchTermForTsQuery(searchTerm);
 
                 if (!string.IsNullOrEmpty(tsQuery))
                 {
@@ -753,6 +558,16 @@ namespace MailArchiver.Services.Core
         #region Export Methods
 
         public async Task<byte[]> ExportEmailsAsync(ExportViewModel parameters, List<int> allowedAccountIds = null)
+            => (await ExportEmailAsync(parameters, allowedAccountIds)).Bytes;
+
+        /// <summary>
+        /// Exports a single email and reports whether the bytes are the stored original or a
+        /// reconstruction. A stored original is preferred when one exists: it is the only form
+        /// that is byte-identical to what was received. A message whose stored content fails its
+        /// checksum throws <see cref="RawMessageIntegrityException"/> instead of falling back to
+        /// the reconstruction, so altered content is never silently replaced by a rebuilt one.
+        /// </summary>
+        public async Task<EmailExportResult> ExportEmailAsync(ExportViewModel parameters, List<int> allowedAccountIds = null)
         {
             using var ms = new MemoryStream();
 
@@ -769,11 +584,25 @@ namespace MailArchiver.Services.Core
                     throw new InvalidOperationException($"Email with ID {parameters.EmailId.Value} not found");
                 }
 
+                if (parameters.Format == ExportFormat.Eml)
+                {
+                    var original = await _rawMessageStore.ReadAsync(email.Id);
+                    if (original != null)
+                    {
+                        _logger.LogInformation(
+                            "Exporting email {EmailId} as its stored original (source {Source}, storage {Storage})",
+                            email.Id, original.Source, original.StorageType);
+
+                        return new EmailExportResult(
+                            original.Bytes, true, original.Source, original.Sha256, original.StorageType);
+                    }
+                }
+
                 await ExportSingleEmailAsEml(email, ms);
             }
 
             ms.Position = 0;
-            return ms.ToArray();
+            return new EmailExportResult(ms.ToArray(), false);
         }
 
         private async Task ExportSingleEmailAsEml(ArchivedEmail email, MemoryStream ms)
@@ -1830,7 +1659,8 @@ namespace MailArchiver.Services.Core
 
         #region Archiving
 
-        public async Task<bool> ArchiveEmailAsync(MailAccount account, MimeMessage message, bool isOutgoing, string? folderName = null)
+        public async Task<bool> ArchiveEmailAsync(MailAccount account, MimeMessage message, bool isOutgoing, string? folderName = null,
+            RawMessageCapture? rawMessage = null)
         {
             // Extract date with fallback handling for malformed Date headers
             var emailDate = MailContentHelper.ExtractEmailDate(message.Date, message.Headers);
@@ -2203,10 +2033,22 @@ namespace MailArchiver.Services.Core
                     archivedEmail.HasAttachments = true;
                 }
 
+                archivedEmail.RawMessage = null;
+
                 try
                 {
                     _context.ArchivedEmails.Add(archivedEmail);
                     await _context.SaveChangesAsync();
+
+                    // The row is in place, so the id exists; a filesystem-backed original is
+                    // written now and its metadata row added in a second save.
+                    var storedRaw = _rawMessageStore.CreateRow(archivedEmail.Id, rawMessage);
+                    if (storedRaw != null)
+                    {
+                        archivedEmail.RawMessage = storedRaw;
+                        await _rawMessageStore.PersistAsync(storedRaw, rawMessage);
+                        await _context.SaveChangesAsync();
+                    }
 
                     // Attachments are already saved via EF relationship (cascade)
                     _logger.LogInformation("Successfully saved email with {Count} attachments", emailAttachments.Count);
@@ -2632,6 +2474,24 @@ namespace MailArchiver.Services.Core
                             emailsDeleted, attachmentsDeleted);
 
                         await _context.SaveChangesAsync();
+
+                        // The original files go after the rows are gone: deleting them first would
+                        // lose the original if this deletion fails.
+                        if (emailsDeleted > 0)
+                        {
+                            try
+                            {
+                                await _rawMessageStore!.DeleteAsync(batchIds);
+                            }
+                            catch (Exception rawEx)
+                            {
+                                // Never let an original stop the retention run: the orphan
+                                // collector picks the leftover file up later.
+                                _logger.LogError(rawEx,
+                                    "Could not delete the stored originals of a retention batch of account {AccountName}",
+                                    account.Name);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {

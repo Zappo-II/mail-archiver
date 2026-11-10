@@ -36,6 +36,7 @@ services:
       # REST API Settings (read-only, disabled by default)
       - Api__Enabled=false
       - Api__AllowAttachmentDownloads=true
+      - Api__AllowMessageDownloads=true
       - Api__EnableSwaggerUi=true
       - Api__DefaultPageSize=20
       - Api__MaxPageSize=100
@@ -47,6 +48,8 @@ services:
       - Mcp__DefaultPageSize=20
       - Mcp__MaxResults=100
       - Mcp__MaxAttachmentBytes=10000000
+      - Mcp__AllowMessageDownloads=true
+      - Mcp__MaxMessageBytes=10000000
       - Mcp__RateLimitPerMinute=120
 
       # MailSync Settings
@@ -64,6 +67,15 @@ services:
       - MailSync__GlobalExcludedFolders__0=Calendar
       - MailSync__GlobalExcludedFolders__1=Contacts
 
+      # Original Message Storage (complete .eml per email, disabled by default)
+      - RawMessages__Enabled=false
+      - RawMessages__Storage=postgres
+      - RawMessages__MaxMessageSizeMb=50
+      - RawMessages__IncludeGraph=true
+      - RawMessages__FileSystem__BasePath=RawMessages
+      - RawMessages__FileSystem__ShardDepth=2
+      - RawMessages__FileSystem__VerifyChecksumOnRead=true
+
       # BatchRestore Settings
       - BatchRestore__AsyncThreshold=50
       - BatchRestore__MaxSyncEmails=150
@@ -73,6 +85,9 @@ services:
 
       # Tenant Management Settings
       - TenantManagement__MaxSelectedMailboxes=1000
+
+      # Mailcow Settings
+      - Mailcow__MaxSelectedMailboxes=1000
 
       # BatchOperation Settings
       - BatchOperation__BatchSize=50
@@ -144,6 +159,8 @@ services:
 
       # ReleaseNotes Settings (Version Update Splash Screen)
       - ReleaseNotes__Enabled=true
+      - ReleaseNotes__UpdateHintEnabled=true
+      - ReleaseNotes__UpdateCheckIntervalHours=6
 
       # Logging Settings (Optional - defaults to Information level)
       - Logging__LogLevel__Default=Information
@@ -175,6 +192,9 @@ services:
       # (also configure LocalImport__AllowedPaths__0=/data/import in environment variables)
       # - /path/to/your/mbox/files:/data/import
       - ./data-protection-keys:/app/DataProtection-Keys
+      # Only with RawMessages__Storage=filesystem: keep the original messages outside the
+      # container, otherwise they are lost when the container is recreated.
+      # - ./raw-messages:/app/RawMessages
     depends_on:
       postgres:
         condition: service_healthy
@@ -240,7 +260,7 @@ docker compose restart
 ### 🔐 Authentication Settings
 - `Authentication__Username`: The username for the admin account.
 - `Authentication__Password`: The password for the admin account.
-- `Authentication__SessionTimeoutMinutes`: The session timeout in minutes.
+- `Authentication__SessionTimeoutMinutes`: The session timeout in minutes. This applies to the non-persistent login cookie; users who tick **Remember Me** on the login form get a persistent cookie valid for a fixed 7 days instead. See [User Management → Remember Me](UserManagement.md#staying-signed-in-the-remember-me-checkbox).
 - `Authentication__CookieName`: The name of the authentication cookie.
 - `Authentication__CookieSameSite`: Configures the SameSite attribute for authentication, session, and CSRF protection cookies. Valid values are:
   - `Strict` (default): Maximum security. Cookies are only sent with same-site requests. This may cause issues when navigating to the application from external links (e.g., clicking a link from another website), as the existing session won't be recognized.
@@ -251,6 +271,7 @@ docker compose restart
 The optional read-only REST API is **disabled by default**. See the [REST API guide](API.md) for the full reference.
 - `Api__Enabled`: Master switch for the read-only REST API (default `false`). When `false`, all `/api/*` routes return `404`.
 - `Api__AllowAttachmentDownloads`: Allow downloading attachment bytes through the API (default `true`). When `false`, the attachment endpoint returns `403`.
+- `Api__AllowMessageDownloads`: Allow downloading complete messages through the API, both the rebuilt `/eml` and the original `/raw` (default `true`). When `false`, both endpoints return `403`. A complete message carries its attachments, so **both** this switch and `Api__AllowAttachmentDownloads` must be `true`; turning either one off disables both endpoints.
 - `Api__EnableSwaggerUi`: Expose Swagger UI at `/apidocs` and the OpenAPI document at `/apidocs/spec/v1.json` (default `true`). Both require a logged-in browser session.
 - `Api__DefaultPageSize`: Default page size for list endpoints when not specified (default `20`).
 - `Api__MaxPageSize`: Maximum allowed page size; larger requests are clamped (default `100`).
@@ -263,6 +284,8 @@ The optional MCP (Model Context Protocol) server exposes the same read-only mail
 - `Mcp__DefaultPageSize`: Default page size used by `search_emails` when the caller omits `pageSize` (default `20`).
 - `Mcp__MaxResults`: Upper bound for the page size of `search_emails`; larger values are clamped (default `100`).
 - `Mcp__MaxAttachmentBytes`: Maximum attachment size (in bytes) the `get_attachment` tool will return inline as base64; larger attachments are refused (default `10000000` ≈ 10 MB).
+- `Mcp__AllowMessageDownloads`: Allow the `get_email_eml` and `get_email_raw` tools to return complete messages (default `true`). When `false`, the tools return an error. A complete message carries its attachments, so **both** this switch and `Mcp__AllowAttachmentDownloads` must be `true`; turning either one off disables both tools.
+- `Mcp__MaxMessageBytes`: Maximum message size (in bytes) the `get_email_eml` and `get_email_raw` tools will return inline; larger messages are refused (default `10000000` ≈ 10 MB).
 - `Mcp__RateLimitPerMinute`: Fixed-window request budget per API key per minute (default `120`).
 
 ### 📨 MailSync Settings
@@ -290,6 +313,36 @@ The optional MCP (Model Context Protocol) server exposes the same read-only mail
   ```
 - `MailSync__ExcludeSubfolders`: Whether an exclusion entry also covers the folders below the one it names. Applies to the per-account list and the installation-wide one alike, and to both providers. Default `false`, matching the behaviour before the option existed: an entry `Deleted Items` matches only that folder, and a tree is kept out of the archive by naming its root and every folder below it. Set to `true` to have an entry take the tree underneath as well — an entry `Deleted Items` then also keeps `Deleted Items/2024` and the rest of that branch out of the archive. The rule anchors on the path separator, so it takes whole folders and never part of a name: `Archive` covers `Archive` and `Archive/Team`, and leaves a mail folder called `Team Archive Review` alone. A `.` counts as a separator too, the same way the path-suffix rule treats it.
 
+### 📧 Original Message Storage Settings
+
+By default the archive keeps only the parsed parts of an email, so an exported `.eml` is
+a reconstruction: transfer encodings, MIME boundaries and header folding differ from the
+message as received, and DKIM signatures no longer verify. With `RawMessages:Enabled` the
+complete original is stored as well.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `RawMessages__Enabled` | `false` | Store the original of every newly archived email. |
+| `RawMessages__Storage` | `postgres` | Where the bytes live: `postgres` or `filesystem`. |
+| `RawMessages__MaxMessageSizeMb` | `50` | Larger messages are archived without their original. `0` = no limit. |
+| `RawMessages__IncludeGraph` | `true` | Also store originals for Microsoft 365 (Graph) accounts. |
+| `RawMessages__FileSystem__BasePath` | `RawMessages` | Directory for the message files. Must point at a mounted volume in Docker. |
+| `RawMessages__FileSystem__ShardDepth` | `2` | Directory levels the email id is spread over. |
+| `RawMessages__FileSystem__VerifyChecksumOnRead` | `true` | Verify the SHA-256 on every download. |
+| `RawMessages__FileSystem__OrphanCleanupEnabled` | `true` | Remove message files that no email refers to. |
+| `RawMessages__FileSystem__OrphanCleanupIntervalHours` | `24` | How often that sweep runs. |
+| `RawMessages__FileSystem__OrphanCleanupGraceHours` | `24` | Files younger than this are never removed. |
+
+!!! warning "Filesystem backend needs a mounted volume"
+    With `RawMessages__Storage=filesystem` the message files live outside the database.
+    Without a bind mount they sit in the container's writable layer and are lost on the
+    next container recreation while the database rows survive. Back up the directory
+    together with the database dump.
+
+See **[Original Message Storage](RawMessages.md)** for the full description: where the
+original is served, the storage backends, how to move existing messages between them with
+`--migrate-raw-storage`, and what to back up.
+
 ### 📤 BatchRestore Settings
 - `BatchRestore__AsyncThreshold`: The number of emails that triggers async processing.
 - `BatchRestore__MaxSyncEmails`: The maximum number of emails for sync processing.
@@ -299,6 +352,11 @@ The optional MCP (Model Context Protocol) server exposes the same read-only mail
 
 ### 🏢 Tenant Management Settings
 - `TenantManagement__MaxSelectedMailboxes`: Maximum number of mailboxes that can be added in a single Tenant Management operation. Default is `1000`. Increase this for very large tenants, or lower it to prevent accidental mass imports. When the limit is exceeded, the operation is rejected with a validation error and no accounts are created. See [M365 Tenant Import Guide](M365TenantImport.md) for details.
+
+### 🐄 Mailcow Settings
+- `Mailcow__MaxSelectedMailboxes`: Maximum number of mailboxes that can be provisioned in a single Mailcow activation run. Default is `1000`. Lower it to prevent accidental mass provisioning, or increase it for large instances. When the limit is exceeded, no accounts are created. See [Mailcow Instances](Mailcow.md) for details.
+- Mailcow integration additionally requires `Security__CredentialEncryptionKey` (see [Security Settings](#-security-settings)). Connecting an instance and activating mailboxes are both refused while credential encryption is disabled, so the API key and generated app passwords can never be stored as plaintext.
+- Outbound access is required to the Mailcow HTTPS API and to the IMAP host over TLS (normally port `993`).
 
 ### 📦 BatchOperation Settings
 - `BatchOperation__BatchSize`: The batch size for email operations.
@@ -370,7 +428,7 @@ Both folder settings ship empty on purpose: rewriting or dropping folders withou
   - When using `docker exec` to run the import command, the file path provided via `--file` must be within one of these allowed paths.
   - This security measure prevents arbitrary file system access from CLI commands.
   - Multiple paths can be configured for different import sources.
-  - See [CLI Local Import Guide](CLI-Local-Import.md) for detailed usage instructions.
+  - See [CLI commands](CLI.md) for detailed usage instructions.
 
 ### 📄 CSV Import Settings
 - `CsvImport__MaxRows`: Maximum number of CSV rows (mailboxes) processed in a single bulk import. Default is `5000`. Increase this value for large deployments; lower it to limit the impact of a single import run on database load.
@@ -395,13 +453,17 @@ Settings for the audit data export page (admin only, reachable from the Logs pag
   - The column default is adjusted so that newly imported emails are also locked.
   - The current policy state is logged to the AccessLogs table on every startup (visible on the Logs page as "Deletion Policy" entries) for auditability.
   - Local retention deletion is exempt: emails that fall under a configured retention period are still deleted (they are unlocked immediately before deletion within the retention process).
+- `DeletionPolicy__MaxBulkDeleteEmails`: Upper bound for one filter-based bulk deletion (*Delete all matches*). Default is `100000`. A filter that matches more emails is rejected with a message asking to narrow it; the job never silently truncates. Emails locked by the retention policy are skipped and reported in the job status, not unlocked. The job re-checks this limit and `DeletionPolicy__DeletionAllowed` when it starts, so a job queued before a policy change stops instead of running with the old setting.
 - **Immutability protection:** When `IsLocked = true`, the database compliance trigger (`prevent_locked_email_changes`) blocks ANY modification to the email row — all columns are protected, not just a fixed field list. The only exempt columns are `IsLocked` itself (so that unlocking for retention deletion and startup policy application remains possible) and `FolderName` (so that IMAP sync can update the folder when an email is moved server-side). The protection is column-agnostic (JSONB-based comparison) and automatically covers future schema additions.
 
 ### 🕐 TimeZone Settings
 - `TimeZone__DisplayTimeZoneId`: The time zone used for displaying email timestamps in the UI. Uses IANA time zone identifiers (e.g., "Europe/Berlin", "Asia/Tokyo"). Default is "Etc/UCT" for backward compatibility. When importing emails timestamps will be converted to this time zone for display purposes.
 
 ### 🎉 ReleaseNotes Settings (Version Update Splash Screen)
-- `ReleaseNotes__Enabled`: Enable or disable the version update splash screen (true/false). Default is `true`. When enabled, administrators will see a one-time changelog modal after an application update, showing the release notes fetched from GitHub Releases for the current version. Each administrator can dismiss the modal, and it will only reappear for a new version. Set to `false` to completely disable this feature.
+- `ReleaseNotes__AppVersion`: The version string this instance reports. It is matched against GitHub release tags and decides whether a newer release exists. When empty, the changelog falls back to the compiled assembly version and the update hint stays off.
+- `ReleaseNotes__Enabled`: Enable or disable the version update splash screen (true/false). Default is `true`. When enabled, administrators will see a one-time changelog modal after an application update, showing the release notes fetched from GitHub Releases for the current version. Each administrator can dismiss the modal, and it will only reappear for a new version. Set to `false` to completely disable this feature, including the update hint.
+- `ReleaseNotes__UpdateHintEnabled`: Show administrators a small toast in the lower right corner when GitHub publishes a newer stable release than the installed version (true/false). Default is `true`. The toast links to that release and is dismissed per version in the browser. Drafts and prereleases are ignored. Requires `ReleaseNotes__AppVersion`; without it no hint is shown.
+- `ReleaseNotes__UpdateCheckIntervalHours`: How often the GitHub release list is refreshed, in hours. Default is `6`. A shorter interval makes a new release visible sooner in a long-running instance, a longer one reduces GitHub API calls. Minimum is `1`.
 
 ### 🔧 Database Maintenance Settings
 - `DatabaseMaintenance__Enabled`: Enable or disable automatic daily database maintenance (true/false). Default is `false`. When enabled, the system will automatically run VACUUM ANALYZE operations to optimize database performance and prevent bloat. See [Database Maintenance Guide](DatabaseMaintenance.md) for more details.
@@ -468,6 +530,7 @@ For detailed setup instructions for OpenID Connect authentication, see [OIDC Imp
 - `OAuth__ClientScopes__0`: First scope requested from the identity provider (openid)
 - `OAuth__ClientScopes__1`: Second scope requested from the identity provider (profile)
 - `OAuth__ClientScopes__2`: Third scope requested from the identity provider (email)
+- `OAuth__ResponseMode`: Optional response mode of the authorization request (`query`, `fragment` or `form_post`). Default is `form_post`, the ASP.NET Core default. Set to `query` for providers that do not support `form_post`, such as Synology SSO Server. See [Provider Compatibility](OIDC_Implementation.md#provider-compatibility).
 - `OAuth__AutoApproveUsers`: Automatically approve new OIDC users without requiring manual admin approval (true/false). Default is `false`.
 
 #### User Provisioning Settings
@@ -475,7 +538,7 @@ For detailed setup instructions for OpenID Connect authentication, see [OIDC Imp
 - `OAuth__AdminEmails__0`, `OAuth__AdminEmails__1`, etc.: Email addresses that should be automatically provisioned as administrators. Users with these email addresses will be created as active admins on first OAuth login, bypassing the normal approval process. Email matching is case-insensitive.
 
 #### Passwordless Login Settings
-- `OAuth__DisablePasswordLogin`: Hide username/password fields on login page (true/false). Default is `false`. When enabled, only the OAuth login button is displayed.
+- `OAuth__DisablePasswordLogin`: Disable username/password login (true/false). Default is `false`. When enabled, the password form is hidden **and** the server rejects every password POST, so only the OAuth login is available. Requires `OAuth__Enabled=true`. If OAuth is disabled, this setting has no effect.
 - `OAuth__AutoRedirect`: Automatically redirect users to OAuth provider (true/false). Default is `false`. Requires `OAuth__DisablePasswordLogin` to be `true`. Users will see a brief loading screen before being redirected.
 
 #### Example: Full OIDC-First Configuration

@@ -3,7 +3,6 @@
 **A comprehensive solution for archiving, searching, and exporting emails**
 
 🌐 **Website:** [mail-archiver.org](https://mail-archiver.org)
-🌐 **Roadmap:** [Project Portal](https://project.s1t5.dev/p/YzzZb6pdy8VIZZtrrERyXg)
 
 <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
   <a href="https://mail-archiver.org" target="_blank"><img src="https://img.shields.io/badge/Website-mail--archiver.org-4A90D9?style=for-the-badge&logo=globe&logoColor=white" alt="Website"></a>
@@ -21,17 +20,18 @@
 
 ### 📌 Core Features
 - Automated archiving from multiple accounts with scheduled sync
-- Multilingual responsive UI with dark mode
+- Multilingual responsive UI with dark mode — 14 languages: English, English (GB), 简体中文, Deutsch, Español, Français, Italiano, 日本語, Magyar, Nederlands, Polski, Português (Brasil), Русский, Slovenščina ([Localization](https://s1t5.github.io/mail-archiver/Localization/))
 - OpenID Connect (OIDC) authentication ([OIDC Guide](https://s1t5.github.io/mail-archiver/OIDC_Implementation/))
 
 ### 🔍 Search & Access
 - Advanced search with filters
 - Email preview with attachments
 - Export accounts or selected emails as mbox / zipped EML
+- Optional storage of the original message (complete .eml as received) for spam analysis, DKIM checks and forensics ([Setup Guide](https://s1t5.github.io/mail-archiver/Setup/))
 
 ### 🔌 Programmatic & AI Agent Access
 - **Read-only REST API (v1)** for programmatic access to the archive via scoped per-user API keys — lets scripts read archived mail without ever exposing mailbox credentials ([REST API Guide](https://s1t5.github.io/mail-archiver/API/))
-- **MCP Server (Model Context Protocol)** — optional Streamable HTTP endpoint at `/mcp` that exposes the same read-only archive to AI agents as discoverable tools (`search_emails`, `get_email`, `list_accounts`, `list_folders`, `get_attachment`) ([MCP Guide](https://s1t5.github.io/mail-archiver/MCP/))
+- **MCP Server (Model Context Protocol)** — optional Streamable HTTP endpoint at `/mcp` that exposes the same read-only archive to AI agents as discoverable tools (`search_emails`, `get_email`, `list_accounts`, `list_folders`, `get_attachment`, `get_email_eml`, `get_email_raw`) ([MCP Guide](https://s1t5.github.io/mail-archiver/MCP/))
 
 ### 👥 User Management
 - Multi-user support with account-specific permissions

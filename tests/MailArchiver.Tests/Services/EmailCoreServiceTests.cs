@@ -479,6 +479,135 @@ public class EmailCoreServiceTests
     }
 
     // ============================================================
+    // SearchEmailIdsAsync
+    // ============================================================
+
+    [Fact]
+    public async Task SearchIds_MatchesSearchEmailsAcrossAllPages()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            for (var i = 0; i < 5; i++)
+                ctx.ArchivedEmails.Add(BuildEmail(acct, $"invoice {i}", "a@x.com", "b@x.com", folder: "travel/2022"));
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "invoice elsewhere", "a@x.com", "b@x.com", folder: "INBOX"));
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "unrelated", "a@x.com", "b@x.com", folder: "travel"));
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreService(ctx);
+            // Page size 2 shows only part of the result; the ID query must cover all of it.
+            var (page, pageTotal) = await svc.SearchEmailsAsync("invoice", null, null, acct.Id, "travel", null, 0, 2);
+            var (allPages, _) = await svc.SearchEmailsAsync("invoice", null, null, acct.Id, "travel", null, 0, 50);
+            var (ids, total) = await svc.SearchEmailIdsAsync("invoice", null, null, acct.Id, "travel", null, 100);
+
+            Assert.Equal(2, page.Count);
+            Assert.Equal(5, pageTotal);
+            Assert.Equal(5, total);
+            Assert.Equal(allPages.Select(e => e.Id).OrderBy(x => x), ids.OrderBy(x => x));
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SearchIds_LimitKeepsFirstInSortOrderButCountsAll()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            var old = BuildEmail(acct, "old", "a@x.com", "b@x.com", sentDate: DateTime.UtcNow.AddDays(-10));
+            var newest = BuildEmail(acct, "newest", "a@x.com", "b@x.com", sentDate: DateTime.UtcNow.AddHours(-1));
+            var mid = BuildEmail(acct, "mid", "a@x.com", "b@x.com", sentDate: DateTime.UtcNow.AddDays(-5));
+            ctx.ArchivedEmails.AddRange(old, newest, mid);
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreService(ctx);
+            var (ids, total) = await svc.SearchEmailIdsAsync(null, null, null, acct.Id, null, null, 2,
+                sortBy: "sentdate", sortOrder: "desc");
+
+            Assert.Equal(3, total);
+            Assert.Equal(new[] { newest.Id, mid.Id }, ids);
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SearchIds_TextSortWithDuplicatesSelectsTheFirstPage()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            // Many emails share the same subject, so Subject alone does not order them.
+            // "Select all matching" must still pick the same rows the first page shows.
+            for (var i = 0; i < 6; i++)
+                ctx.ArchivedEmails.Add(BuildEmail(acct, "same subject", "a@x.com", "b@x.com"));
+            ctx.ArchivedEmails.Add(BuildEmail(acct, "zzz later", "a@x.com", "b@x.com"));
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreService(ctx);
+            var (page, _) = await svc.SearchEmailsAsync(null, null, null, acct.Id, null, null, 0, 3,
+                sortBy: "subject", sortOrder: "asc");
+            var (ids, total) = await svc.SearchEmailIdsAsync(null, null, null, acct.Id, null, null, 3,
+                sortBy: "subject", sortOrder: "asc");
+
+            Assert.Equal(7, total);
+            Assert.Equal(page.Select(e => e.Id), ids);
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SearchIds_RespectsAllowedAccounts()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var mine = await SeedAccountAsync(ctx);
+            var other = await SeedAccountAsync(ctx);
+            var myEmail = BuildEmail(mine, "shared subject", "a@x.com", "b@x.com");
+            ctx.ArchivedEmails.Add(myEmail);
+            ctx.ArchivedEmails.Add(BuildEmail(other, "shared subject", "a@x.com", "b@x.com"));
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreService(ctx);
+            var allowed = new List<int> { mine.Id };
+
+            var (ids, total) = await svc.SearchEmailIdsAsync("\"shared subject\"", null, null, null, null, null, 100, allowed);
+            Assert.Equal(1, total);
+            Assert.Equal(new[] { myEmail.Id }, ids);
+
+            // Asking for an account outside the allowed list returns nothing.
+            var (forbiddenIds, forbiddenTotal) = await svc.SearchEmailIdsAsync(null, null, null, other.Id, null, null, 100, allowed);
+            Assert.Empty(forbiddenIds);
+            Assert.Equal(0, forbiddenTotal);
+
+            // An empty allowed list (user without accounts) returns nothing.
+            var (noneIds, noneTotal) = await svc.SearchEmailIdsAsync(null, null, null, null, null, null, 100, new List<int>());
+            Assert.Empty(noneIds);
+            Assert.Equal(0, noneTotal);
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    // ============================================================
     // GetEmailCountByAccountAsync
     // ============================================================
 
@@ -2090,6 +2219,119 @@ public class EmailCoreServiceTests
     }
 
     [Fact]
+    public async Task Export_PrefersStoredOriginal_OverReconstruction()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            var email = BuildEmail(acct, "Subject in the archive", "alice@x.com", "bob@y.com",
+                body: "body stored as a column");
+            ctx.ArchivedEmails.Add(email);
+            await ctx.SaveChangesAsync();
+
+            // Deliberately different from the archived fields in both body and headers: a
+            // reconstruction would rebuild the body and re-serialize the headers, so identical
+            // bytes prove the stored original was served.
+            var original = System.Text.Encoding.UTF8.GetBytes(
+                "Subject: Subject as received\r\n" +
+                "From: alice@x.com\r\n" +
+                "To: bob@y.com\r\n" +
+                "DKIM-Signature: v=1; a=rsa-sha256; b=abc\r\n" +
+                "\r\n" +
+                "body as received");
+
+            var row = RawMessageCodec.Create(
+                new RawMessageCapture(original, RawMessageSource.Imap),
+                new RawMessageOptions { Enabled = true });
+            Assert.NotNull(row);
+
+            email.RawMessage = row;
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreService(ctx);
+            var result = await svc.ExportEmailAsync(new ExportViewModel { EmailId = email.Id });
+
+            Assert.True(result.IsOriginal);
+            Assert.Equal(RawMessageSource.Imap, result.Source);
+            Assert.Equal(row!.Sha256, result.Sha256);
+            Assert.Equal(original, result.Bytes);
+            Assert.Contains("DKIM-Signature", System.Text.Encoding.UTF8.GetString(result.Bytes));
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Export_WithoutStoredOriginal_ReturnsReconstruction()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            var email = BuildEmail(acct, "Rebuilt", "alice@x.com", "bob@y.com", body: "archived body");
+            ctx.ArchivedEmails.Add(email);
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreService(ctx);
+            var result = await svc.ExportEmailAsync(new ExportViewModel { EmailId = email.Id });
+
+            Assert.False(result.IsOriginal);
+            Assert.Null(result.Source);
+
+            using var ms = new MemoryStream(result.Bytes);
+            var parsed = await MimeMessage.LoadAsync(ms);
+            Assert.Equal("Rebuilt", parsed.Subject);
+            // The reconstruction ends the text part with a newline of its own.
+            Assert.StartsWith("archived body", parsed.TextBody);
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Export_RefusesToServeOriginal_WhenChecksumDoesNotMatch()
+    {
+        var ctx = _fixture.CreateContext();
+        try
+        {
+            var acct = await SeedAccountAsync(ctx);
+            var email = BuildEmail(acct, "Tampered", "alice@x.com", "bob@y.com");
+            ctx.ArchivedEmails.Add(email);
+            await ctx.SaveChangesAsync();
+
+            var row = RawMessageCodec.Create(
+                new RawMessageCapture(
+                    System.Text.Encoding.UTF8.GetBytes("Subject: Tampered\r\n\r\nbody"),
+                    RawMessageSource.Imap),
+                new RawMessageOptions { Enabled = true });
+            Assert.NotNull(row);
+
+            // A row whose recorded checksum no longer describes its content. Falling back to the
+            // reconstruction here would hide that the archive was altered.
+            row!.Sha256 = new string('0', 64);
+            email.RawMessage = row;
+            await ctx.SaveChangesAsync();
+
+            var svc = ServiceFactory.CreateEmailCoreService(ctx);
+
+            await Assert.ThrowsAsync<RawMessageIntegrityException>(
+                () => svc.ExportEmailAsync(new ExportViewModel { EmailId = email.Id }));
+        }
+        finally
+        {
+            await CleanupTestAccountAsync(ctx);
+            await ctx.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Export_PreservesDisplayNames()
     {
         var ctx = _fixture.CreateContext();
@@ -2558,6 +2800,20 @@ public class EmailCoreServiceTests
         if (accountIds.Count == 0) return;
 
         var emails = await ctx.ArchivedEmails.Where(e => accountIds.Contains(e.MailAccountId)).ToListAsync();
+
+        // The compliance trigger refuses to delete a locked email, which would leave the test
+        // rows - and their RawMessages - in the database for good. Unlock first, the same way
+        // the retention path does.
+        if (emails.Any(e => e.IsLocked))
+        {
+            await ctx.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE mail_archiver.\"ArchivedEmails\" SET \"IsLocked\" = false WHERE \"MailAccountId\" = ANY({accountIds.ToArray()})");
+            foreach (var email in emails)
+            {
+                email.IsLocked = false;
+            }
+        }
+
         ctx.ArchivedEmails.RemoveRange(emails);
 
         var caches = await ctx.AccountStorageCaches.Where(c => accountIds.Contains(c.MailAccountId)).ToListAsync();

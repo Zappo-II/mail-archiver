@@ -5,6 +5,9 @@
 Set it up once, keep every message, and find it again years later.
 </div>
 
+!!! note "Translations"
+    The English documentation is the authoritative source. Every other language is translated automatically from these pages and may contain errors. Use the language switcher in the header to change the language.
+
 <div class="grid cards" markdown>
 
 -   :material-rocket-launch:{ .lg .middle } __Getting started__
@@ -115,13 +118,22 @@ Set it up once, keep every message, and find it again years later.
 
     [:octicons-arrow-right-24: Read](Synchronization.md)
 
--   :material-file-import:{ .lg .middle } __CLI local import__
+-   :material-console:{ .lg .middle } __CLI commands__
 
     ---
 
-    Import existing archives from the command line.
+    Import existing archives from the command line, and move stored original
+    messages between the database and the filesystem.
 
-    [:octicons-arrow-right-24: Read](CLI-Local-Import.md)
+    [:octicons-arrow-right-24: Read](CLI.md)
+
+-   :material-upload:{ .lg .middle } __Web import (EML / MBox)__
+
+    ---
+
+    Upload an MBox file or a ZIP of EML files through the browser.
+
+    [:octicons-arrow-right-24: Read](Import-EML-MBox.md)
 
 -   :material-timer-sand:{ .lg .middle } __Rate limit handling__
 
@@ -161,6 +173,22 @@ Set it up once, keep every message, and find it again years later.
 
     [:octicons-arrow-right-24: Read](MailboxMigration.md)
 
+-   :material-download:{ .lg .middle } __Account export (EML / MBox)__
+
+    ---
+
+    Write a whole account back out as a portable EML or MBox archive.
+
+    [:octicons-arrow-right-24: Read](Export-Account.md)
+
+-   :material-email-lock:{ .lg .middle } __Original message storage__
+
+    ---
+
+    Keep the message as received, so DKIM still verifies and exports are byte-exact.
+
+    [:octicons-arrow-right-24: Read](RawMessages.md)
+
 -   :material-content-duplicate:{ .lg .middle } __Attachment deduplication__
 
     ---
@@ -195,7 +223,8 @@ Set it up once, keep every message, and find it again years later.
 
     ---
 
-    Create users, grant admin rights and assign mailbox permissions.
+    Create users, grant admin rights, assign mailbox permissions and change your
+    own password.
 
     [:octicons-arrow-right-24: Read](UserManagement.md)
 
@@ -269,6 +298,14 @@ Set it up once, keep every message, and find it again years later.
 
     [:octicons-arrow-right-24: Read](M365TenantImport.md)
 
+-   :material-email-multiple:{ .lg .middle } __Mailcow instances__
+
+    ---
+
+    Select mailboxes centrally and provision dedicated IMAP app passwords.
+
+    [:octicons-arrow-right-24: Read](Mailcow.md)
+
 -   :material-account-key:{ .lg .middle } __Personal Microsoft accounts__
 
     ---
@@ -320,6 +357,14 @@ Set it up once, keep every message, and find it again years later.
 ## 🧰 Operations & Development
 
 <div class="grid cards" markdown>
+
+-   :material-translate:{ .lg .middle } __Language and localization__
+
+    ---
+
+    Switch the interface language, and how to add a translation.
+
+    [:octicons-arrow-right-24: Read](Localization.md)
 
 -   :material-docker:{ .lg .middle } __Docker Compose logs__
 

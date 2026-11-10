@@ -750,6 +750,47 @@ namespace MailArchiver.Services.Shared
         }
 
         /// <summary>
+        /// Returns the MIME type to use when playing an attachment inline in an HTML5
+        /// &lt;video&gt; element, or <c>null</c> when the attachment is not a video that
+        /// browsers can play.
+        /// Mail clients frequently label MP4 attachments as <c>application/octet-stream</c>
+        /// or leave the type empty, so the file extension is used as a fallback when the
+        /// declared type is missing or generic. A specific non-video type (e.g.
+        /// <c>text/plain</c>) is never overridden by the extension.
+        /// </summary>
+        public static string? GetInlineVideoContentType(string? contentType, string? fileName)
+        {
+            var normalized = contentType?.Split(';')[0].Trim().ToLowerInvariant() ?? string.Empty;
+
+            // Every MIME type of the MP4/QuickTime container family plays in the same
+            // HTML5 player, so they are all normalized to video/mp4. video/x-m4v is the
+            // type .m4v files usually carry; video/quicktime is what some clients use for
+            // H.264 in an MP4 container.
+            switch (normalized)
+            {
+                case "video/mp4":
+                case "video/x-m4v":
+                case "video/x-mp4":
+                case "video/quicktime":
+                    return "video/mp4";
+            }
+
+            if (normalized.Length > 0
+                && normalized != "application/octet-stream"
+                && normalized != "binary/octet-stream")
+            {
+                return null;
+            }
+
+            return Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant() switch
+            {
+                ".mp4" => "video/mp4",
+                ".m4v" => "video/mp4",
+                _ => null
+            };
+        }
+
+        /// <summary>
         /// Resolves inline images in HTML by converting cid: references to data URLs.
         /// </summary>
         public static string ResolveInlineImagesInHtml(string htmlBody, List<Models.EmailAttachment> attachments)
@@ -821,6 +862,126 @@ namespace MailArchiver.Services.Shared
                 if (addresses[i] is MailboxAddress mb && !string.IsNullOrEmpty(names[i]))
                     mb.Name = names[i];
             }
+        }
+
+        /// <summary>
+        /// Adds the stored address value of one header field to <paramref name="target"/> without
+        /// ever throwing on values that are not RFC 5322 addresses.
+        /// </summary>
+        /// <remarks>
+        /// Stored values are not guaranteed to be address lists. Exchange and Microsoft 365
+        /// mailboxes store internal senders and recipients as X.500 distinguished names
+        /// ("/O=EXCHANGELABS/OU=.../CN=RECIPIENTS/CN=..."), which are not addr-specs. Parsing
+        /// such a value throws, and the previous fallback (<c>new MailboxAddress("", raw)</c>)
+        /// validated the same value again and threw again — so the whole message was dropped
+        /// from the export. Losing an archived email is never acceptable, so this method never
+        /// throws: whatever cannot be parsed is kept verbatim in an
+        /// <c>X-MailArchiver-Original-*</c> header instead.
+        /// Addresses are parsed one by one so that a single unusable entry does not discard the
+        /// valid ones in the same list.
+        /// </remarks>
+        /// <param name="message">The message the recovered header is written to.</param>
+        /// <param name="target">The address list to fill (From/To/Cc/Bcc).</param>
+        /// <param name="field">Header field name, used for the recovery header suffix.</param>
+        /// <param name="raw">The stored address value as it came out of the database.</param>
+        /// <param name="displayNamesCsv">Stored display names, if any.</param>
+        public static void AddStoredAddresses(
+            MimeMessage message,
+            InternetAddressList target,
+            string field,
+            string? raw,
+            string? displayNamesCsv)
+        {
+            if (message == null || target == null || string.IsNullOrWhiteSpace(raw))
+                return;
+
+            var parsed = new InternetAddressList();
+            var unparsable = new List<string>();
+
+            foreach (var part in SplitAddressList(raw))
+            {
+                InternetAddressList? one = null;
+                try
+                {
+                    one = InternetAddressList.Parse(part);
+                }
+                catch
+                {
+                    // Not an address list (e.g. an X.500 DN) — handled below.
+                }
+
+                if (one != null && one.Count > 0)
+                {
+                    foreach (var address in one)
+                        parsed.Add(address);
+                }
+                else
+                {
+                    unparsable.Add(part);
+                }
+            }
+
+            // Display names only line up with the parsed addresses when every entry parsed.
+            if (unparsable.Count == 0)
+                ApplyDisplayNames(parsed, displayNamesCsv);
+
+            target.AddRange(parsed);
+
+            // Keep the original values so no information is lost. Written as a custom header
+            // rather than as a group address: a group would hide the raw value in a display
+            // name, where any consumer expecting Mailboxes/Address would silently see nothing.
+            if (unparsable.Count > 0)
+                message.Headers.Add("X-MailArchiver-Original-" + field, string.Join(", ", unparsable));
+        }
+
+        /// <summary>
+        /// Splits a stored address value into its individual entries. Commas and semicolons both
+        /// occur as separators in archived data, and commas inside quoted display names or angle
+        /// brackets must not split an entry.
+        /// </summary>
+        private static List<string> SplitAddressList(string raw)
+        {
+            var parts = new List<string>();
+            var current = new StringBuilder();
+            var inQuotes = false;
+            var inAngle = false;
+
+            foreach (var ch in raw)
+            {
+                if (ch == '"')
+                {
+                    inQuotes = !inQuotes;
+                }
+                else if (ch == '<' && !inQuotes)
+                {
+                    inAngle = true;
+                }
+                else if (ch == '>' && !inQuotes)
+                {
+                    inAngle = false;
+                }
+                else if ((ch == ',' || ch == ';') && !inQuotes && !inAngle)
+                {
+                    var entry = current.ToString().Trim();
+                    if (entry.Length > 0)
+                        parts.Add(entry);
+                    current.Clear();
+                    continue;
+                }
+
+                current.Append(ch);
+            }
+
+            var last = current.ToString().Trim();
+            if (last.Length > 0)
+                parts.Add(last);
+
+            // A value that yields no entries at all is kept as a single raw entry, so it still
+            // ends up in the recovery header instead of disappearing.
+            if (parts.Count == 0)
+                parts.Add(raw.Trim());
+
+            return parts;
         }
 
         /// <summary>
